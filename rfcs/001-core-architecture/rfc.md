@@ -15,6 +15,8 @@ Actually we can take advantages of both webpack and vite, and avoid all of their
 As we discussed above, Farm is a web building tool aim to be faster(both building performance and resources loading performance) and more consistent, take advantages of existing tools and discard their disadvantages. But Farm is not aim to be a universal bundler, we just focus on web project compiling, which means our inputs are mainly web assets html, js/jsx/ts/tsx, css/scss/less, png/svg/... and so on, and every design we made will be browser first. Though universal bundler is not our first goal, you can achieve whatever you want by plugins.
 
 # Guide-level explanation
+This section will provide a user level view of Farm.
+
 Farm will be divided into two parts:
 - **Compilation core implemented by Rust**: All the compilation flow like resolving, loading, transforming, parsing and dependencies analyzing are charged by Rust compilation core. The Rust core is not visible to users, it is used privately by Farm's npm packages.
 - **CLI and Node API implemented by Typescript**: For the users, they only need to install Farm's npm packages which are written in typescript, then all functionalities are available. The npm packages encapsulate the Rust core and provide CLI and Node API for users.
@@ -67,7 +69,7 @@ export default defineConfig({
 
 then run `npm start` at the project root and visit `http://localhost:7896`.
 
-## Node Api Usage
+## 2. Node Api Usage
 Farm's Api export internal compiler, middleware, watcher, config handler and server, the developer can build their own tools based on these functionalities.
 
 To use farm's api, first install the `@farmfe/core` npm package:
@@ -77,70 +79,82 @@ npm i -D @farmfe/core # install required package into the project
 # or `pnpm add -D @farmfe/core` if you use pnpm
 ```
 
+Example usage:
+
+* Using start/build function directly:
+```ts
+import { start, build, watch } from '@farmfe/core';
+
+// Start a project with a dev server and file watcher. First build the project in dev mode, then the dev server serves compiled resources and the file watcher watches file changes and trigger re-compile
+start({ configPath: './custom.config.js' });
+
+// First build the project in develop mode, then watch a project with a file watcher
+watch({ configPath: './custom.config.js' });
+
+// Only build a project in production mode
+build({ configPath: './custom.config.js' });
+```
+
+* Using internal compiler
+```ts
+// Note that the internal compiler only provide interface to compile or update a project, do not contain functions like Dev Server or HMR, you should use DevServer and Watcher API separately
+import { Compiler, resolveUserConfig } from '@farmfe/core';
+
+const userConfig = resolveUserConfig('./custom.config.js');
+const compiler = new Compiler(userConfig);
+// async compile
+await compiler.compile();
+// sync compile
+compiler.compileSync();
+// async update
+await compiler.update(['./index.ts']);
+// sync update
+compiler.updateSync(['./index.ts']);
+```
+
+* Using dev server and watcher, you can use both of them, or use only one of them and custom another
+```ts
+// DevServer should cooperate with compiler, it will read resources from compiler and serve it.
+// Note that DevServer also contains hmr and web socket or lazy compilation middleware if hmr or lazyCompilation is enabled but does not contains file watcher.
+import { Compiler, DevServer, FileWatcher } from '@farmfe/core'
+
+// ...
+const compiler = new Compiler(config);
+const devServer = new DevServer(compiler, config);
+const fileWatcher = new FileWatcher(compiler, config);
+
+// compiling
+await compiler.compile();
+// watching file system and trigger compiler.update()
+await fileWatcher.watch();
+// listening the specified port
+await devServer.listen();
+```
+
 # Reference-level explanation
-[reference-level-explanation]: #reference-level-explanation
+This section covers the technical design of Farm.
 
-This is the technical portion of the RFC. Explain the design in sufficient detail that:
+## 1. Design Philosophy
+* **Performance first**: Everything will be written in rust as long as we can, only several parts  which is not the performance bottleneck will be written in JS
+* **Rollup style plugin system**: Easy to create your own plugins and easy to migrate your plugins/projects from rollup/vite/webpack. 
+* **first class citizen support of all web assets**: We won't need to transform everything to Javascript any more, we treat anything as first class citizen, in the farm core basic asset like `html`, `js/jsx/ts/tsx`, `css/scss`, `png/svg/...` will be support by default, you can using plugins to support more assets.
+* **browser first**: Farm's production aims to run in the browser/nodejs(only for SSR), we won't be a universal bundler and only try our best to improve web performance and efficiency.
+* **Unbundled first**: We only merging modules together when the module numbers of size reach our limits, when merging modules we will use a powerful merging strategy to control the resources request numbers without losing cache granularity.
+* **Consistence first**: We will make sure the development and production exactly the same by default, what you see in development will be the same as what you got in production.
+* **Compatibility**: Farm will work with both legacy and modern browser.
 
-- Its interaction with other features is clear.
-- It is reasonably clear how the feature would be implemented.
-- Corner cases are dissected by example.
+## 2. Terms
+The definition of terms Farm used:
+* **Module**: Basic compilation unit, it may be a file or a virtual module, for example, all kinds of web asset like `js, ts, jsx, tsx, css, scss, png, svg...`, or virtual modules implemented by plugins.
+* **Resource**: A final generated farm generated after compilation, it may be a js/css/html/png/svg file and may contain may original modules
+* **ModuleGroup**: All static imported modules from an entry will be in the same ModuleGroup.
+* **ModuleGraph**: Dependency graph of all resolved modules
+* **ResouceGraph**: Dependency graph of all generated resources
+* **ModuleBucket**: A collection of modules that will be always together, which means the modules in the same `ModuleBucket` will aways in the final `Resource`
 
-The section should return to the examples given in the previous section, and explain more fully how the detailed proposal makes those examples work.
 
-# Drawbacks
-[drawbacks]: #drawbacks
-
-Why should we *not* do this?
-
-# Rationale and alternatives
-[rationale-and-alternatives]: #rationale-and-alternatives
-
-- Why is this design the best in the space of possible designs?
-- What other designs have been considered and what is the rationale for not choosing them?
-- What is the impact of not doing this?
+## 3. Farm's Architecture
+![Farm Architecture](./resources/farm-arch.png)
 
 # Prior art
-[prior-art]: #prior-art
-
-Discuss prior art, both the good and the bad, in relation to this proposal.
-A few examples of what this can include are:
-
-- For language, library, cargo, tools, and compiler proposals: Does this feature exist in other programming languages and what experience have their community had?
-- For community proposals: Is this done by some other community and what were their experiences with it?
-- For other teams: What lessons can we learn from what other communities have done here?
-- Papers: Are there any published papers or great posts that discuss this? If you have some relevant papers to refer to, this can serve as a more detailed theoretical background.
-
-This section is intended to encourage you as an author to think about the lessons from other languages, provide readers of your RFC with a fuller picture.
-If there is no prior art, that is fine - your ideas are interesting to us whether they are brand new or if it is an adaptation from other languages.
-
-Note that while precedent set by other languages is some motivation, it does not on its own motivate an RFC.
-Please also take into consideration that rust sometimes intentionally diverges from common language features.
-
-# Unresolved questions
-[unresolved-questions]: #unresolved-questions
-
-- What parts of the design do you expect to resolve through the RFC process before this gets merged?
-- What parts of the design do you expect to resolve through the implementation of this feature before stabilization?
-- What related issues do you consider out of scope for this RFC that could be addressed in the future independently of the solution that comes out of this RFC?
-
-# Future possibilities
-[future-possibilities]: #future-possibilities
-
-Think about what the natural extension and evolution of your proposal would
-be and how it would affect the language and project as a whole in a holistic
-way. Try to use this section as a tool to more fully consider all possible
-interactions with the project and language in your proposal.
-Also consider how this all fits into the roadmap for the project
-and of the relevant sub-team.
-
-This is also a good place to "dump ideas", if they are out of scope for the
-RFC you are writing but otherwise related.
-
-If you have tried and cannot think of any future possibilities,
-you may simply state that you cannot think of anything.
-
-Note that having something written down in the future-possibilities section
-is not a reason to accept the current or a future RFC; such notes should be
-in the section on motivation or rationale in this or subsequent RFCs.
-The section merely provides additional information.
+See details in [Motivation](#motivation).
