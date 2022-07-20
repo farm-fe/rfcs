@@ -151,7 +151,7 @@ The definition of terms Farm used:
 * **Resource**: A final generated farm generated after compilation, it may be a js/css/html/png/svg file and may contain may original modules
 * **ModuleGroup**: All static imported modules from an entry will be in the same ModuleGroup.
 * **ModuleGraph**: Dependency graph of all resolved modules
-* **ResouceGraph**: Dependency graph of all generated resources
+* **ResourceGraph**: Dependency graph of all generated resources
 * **ModuleBucket**: A collection of modules that will be always together, which means the modules in the same `ModuleBucket` will always in the final `Resource`
 
 
@@ -186,14 +186,51 @@ impl Plugin for MyPlugin {
 
 The definition of `CompilationContext` is:
 ```rust
-
+/// Shared context through the whole compilation.
+pub struct CompilationContext {
+  pub config: Config,
+  pub module_graph: RwLock<ModuleGraph>,
+  pub module_group_map: ModuleGroupMap,
+  pub plugin_driver: PluginDriver,
+  pub resource_graph: ResourceGraph,
+  pub cache_manager: CacheManager,
+  pub meta: ContextMetaData,
+}
 ```
+`meta` is shared data through the compilation, for example, SourceMap of Swc. Plugins can also custom data and insert it into the `meta.custom`.
 
-## 4.1 ModuleGraph
+Other data structures like module_graph or resource_graph are constructed during the compilation by the Farm core.
 
-## 4.2 ModuleGroup
+### 4.1 ModuleGraph
+#### 4.1.1 Graph Definition
 
-## 4.3 ModuleBucket
+#### 4.1.1 Module
+
+
+### 4.2 ModuleGroupMap
+#### 4.2.1 Map Definition
+
+#### 4.2.1 ModuleGroup 
+
+### 4.3 ResourceGraph
+#### 4.3.1 Graph Definition
+
+#### 4.3.2 Resource
+
+### 4.4 CacheManager
+
+### 4.5 ContextMetaData
+
+## 5. Compilation Flow
+The compilation flow is all about hooks, see the graph below for details:
+
+
+We divide the compilation flow into two stages(which we borrowed from rollup) - Build Stage and Generate Stage.
+
+## 5.1 Build Stage
+
+## 5.2 Generate Stage
+
 
 # Prior art
-See details in [Motivation](#motivation).
+See details in [Motivation](#motivation). Webpack is really slow as it is written by js, Vite is fast but We think it has many drawbacks. So We created Farm.
