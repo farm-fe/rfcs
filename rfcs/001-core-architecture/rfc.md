@@ -1,21 +1,23 @@
-- Feature Name: Farm Core Architecture Design
+- Name: Farm Core Architecture Design
 - Start Date: 2022-07-18
-- RFC PR: [farm-fe/rfcs#0000](https://github.com/farm-fe/rfcs/pull/0000)
+- RFC PR: [farm-fe/rfcs#3](https://github.com/farm-fe/rfcs/pull/3)
 
 # Summary
-This is an RFC to design how to implement a super fast web compiler using the rust language. The new designed compiler should inherit all advantages of existing tools like webpack and vite, but avoid their disadvantages and extremely faster.
+This is an RFC to design how to implement a super fast web compiler with Typescript and Rust. The new designed compiler should inherit all advantages of existing tools like webpack and vite, but avoid their disadvantages and extremely faster.
 
 # Motivation
 As the web project scales, building performance has been the major bottleneck, a web project compilation using webpack may cost 10min or more, a hmr update may cost 5s or more, heavily reduced the efficiency.
 
-So some tools like vite came out, but vite is using native esm and unbundled, the compatibility and the huge numbers of module requests becomes the new bottleneck. And vite is so fast as it uses esbuild which is written in go, which takes performance advantages of the native. But because esbuild can not be used in production for now, vite uses rollup as bundler in production to solve compatibility issue and esbuild stabilization issue, makes the dev and prod greatly different.
+So some tools like vite came out, but vite is using native esm and unbundled in dev mode, the huge numbers of module requests becomes the new bottleneck. And vite is so fast as it uses esbuild which is written in go, which takes performance advantages of the native. But esm is not available for legacy browsers and esbuild is not strong enough to be used in production for now, so vite uses rollup as bundler in production to solve compatibility issue and esbuild stabilization issue, which brings new issues, for example, the dev and prod's behavior maybe greatly different, and rollup is written in Typescript and greatly slower than esbuild.
 
 Actually we can take advantages of both webpack and vite, and avoid all of their disadvantages. Webpack is slow, we can use system level language (Rust) to greatly improve building performance; Vite is unbundled which means the caching can be finer than webpack, but it has problems like inconsistency(dev and prod) and huge requests(may slow down resource loading even crash browser), we can use some module merging strategy to reduce the request numbers without losing cache granularity.
 
 As we discussed above, Farm is a web building tool aim to be faster(both building performance and resources loading performance) and more consistent, take advantages of existing tools and discard their disadvantages. But Farm is not aim to be a universal bundler, we just focus on web project compiling, which means our inputs are mainly web assets html, js/jsx/ts/tsx, css/scss/less, png/svg/... and so on, and every design we made will be browser first. Though universal bundler is not our first goal, you can achieve whatever you want by plugins.
 
+Our goal is to design a really modern web compiler which is super fast, stable, and meant to be the real next generation web build engine.
+
 # Guide-level explanation
-This section will provide a user level view of Farm.
+This section provides a user level view of Farm.
 
 Farm will be divided into two parts:
 - **Compilation core implemented by Rust**: All the compilation flow like resolving, loading, transforming, parsing and dependencies analyzing are charged by Rust compilation core. The Rust core is not visible to users, it is used privately by Farm's npm packages.
@@ -132,7 +134,7 @@ await devServer.listen();
 ```
 
 # Reference-level explanation
-This section covers the technical design of Farm.
+This section covers the technical design details of Farm.
 
 ## 1. Design Philosophy
 * **Performance first**: Everything will be written in rust as long as we can, only several parts  which is not the performance bottleneck will be written in JS
@@ -150,11 +152,48 @@ The definition of terms Farm used:
 * **ModuleGroup**: All static imported modules from an entry will be in the same ModuleGroup.
 * **ModuleGraph**: Dependency graph of all resolved modules
 * **ResouceGraph**: Dependency graph of all generated resources
-* **ModuleBucket**: A collection of modules that will be always together, which means the modules in the same `ModuleBucket` will aways in the final `Resource`
+* **ModuleBucket**: A collection of modules that will be always together, which means the modules in the same `ModuleBucket` will always in the final `Resource`
 
 
-## 3. Farm's Architecture
-![Farm Architecture](./resources/farm-arch.png)
+## 3. Architecture
+Farm core contains two parts:
+* Typescript is responsible for config/plugins handling, DevServer and FileWatcher(for HMR)
+* Rust core is responsible for the compilation details, including module resolving/loading/parsing and resource optimizing/generating.
+
+See detailed graph below:
+
+![Farm Architecture](./resources/farm-architecture.png)
+
+The details of each part will be designed in following sections.
+
+## 4. Compilation Context
+Compilation Context contains all shared info across the compilation, this section covers the details of CompilationContext.
+
+CompilationContext can be accessed in the plugins through hook params:
+```rust
+struct MyPlugin {}
+
+impl Plugin for MyPlugin {
+  fn name(&self) -> String {
+    String::from("MyPlugin")
+  }
+  // access CompilationContext via param
+  fn resolve(&self, param: &PluginResolveHookParam, context: &CompilationContext) -> Result<Option<PluginResolveHookResult>> {
+    // ..
+  }
+}
+```
+
+The definition of `CompilationContext` is:
+```rust
+
+```
+
+## 4.1 ModuleGraph
+
+## 4.2 ModuleGroup
+
+## 4.3 ModuleBucket
 
 # Prior art
 See details in [Motivation](#motivation).

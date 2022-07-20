@@ -5,7 +5,7 @@
   // language - current active spelling language
   "language": "en",
   // words - list of words to be always considered correct
-  "words": ["esbuild", "pnpm", "farmfe", "roadmap"],
+  "words": ["esbuild", "pnpm", "farmfe", "roadmap", "struct"],
   "ignorePaths": [
     "pnpm-lock.yaml",
     "**/package.json",
