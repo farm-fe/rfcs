@@ -16,6 +16,8 @@ As we discussed above, Farm is a web building tool aim to be faster(both buildin
 
 Our goal is to design a really modern web compiler which is super fast, stable, and meant to be the real next generation web build engine.
 
+> Note: this RFC mainly covers the architecture, the details of each part will be split to a separate RFC.
+
 # Guide-level explanation
 This section provides a user level view of Farm.
 
@@ -31,11 +33,13 @@ Farm npm packages is designed to provide two kind of usages: CLI or Node Api, CL
 Two kind of official cli provided: `create-farm-app` for creating a farm project with official templates and `@farmfe/cli` for starting or building a farm project.
 
 ### 1.1 Using `create-farm-app` to create a project
+
 ```bash
 npx create-farm-app # create a farm project using official templates
 npm start # start the project using farm
 npm run build # build the project using farm
 ```
+`create-farm-app` will create a react based project at first, more templates and feature selection will be added in the feature.
 
 #### 1.2 Using `@farmfe/cli` to start/build a project
 First you need to create a project by yourself, then install the farm project as below:
@@ -69,7 +73,14 @@ export default defineConfig({
 });
 ```
 
-then run `npm start` at the project root and visit `http://localhost:7896`.
+then run `farm start` at the project root and visit `http://localhost:7896`.
+
+Farm CLI will provide following commands:
+* **start**: start a farm project in dev mode, enable hmr and dev server by default.
+* **build**: build a farm project in prod mode.
+* **watch**: similar to start except `watch` won't launch dev server.
+* **preview**: launch a server to preview the built resources.
+
 
 ## 2. Node Api Usage
 Farm's Api export internal compiler, middleware, watcher, config handler and server, the developer can build their own tools based on these functionalities.
@@ -197,39 +208,47 @@ pub struct CompilationContext {
   pub meta: ContextMetaData,
 }
 ```
-`meta` is shared data through the compilation, for example, SourceMap of Swc. Plugins can also custom data and insert it into the `meta.custom`.
+`meta` is shared data through the compilation, for example, SourceMap of Swc. Plugins can also custom data and insert it into `meta.custom`.
 
-Other data structures like module_graph or resource_graph are constructed during the compilation by the Farm core.
+Other data structures like module_graph or resource_graph are constructed during the compilation lifecycle of the Farm core.
 
-### 4.1 ModuleGraph
-#### 4.1.1 Graph Definition
+The details of each field of `CompilationContext` will be introduced in a separate RFC, for example, `ModuleGraph` and `ModuleGroupMap` are related to `module merging algorithm` and `CacheManager` is related to `cache system`. We only cover the goal in the RFC.
 
-#### 4.1.1 Module
-
-
-### 4.2 ModuleGroupMap
-#### 4.2.1 Map Definition
-
-#### 4.2.1 ModuleGroup 
-
-### 4.3 ResourceGraph
-#### 4.3.1 Graph Definition
-
-#### 4.3.2 Resource
-
-### 4.4 CacheManager
-
-### 4.5 ContextMetaData
-
-## 5. Compilation Flow
+## 5. Compilation Flow And Plugin Hooks
 The compilation flow is all about hooks, see the graph below for details:
 
+TODO: need hook flows here
 
 We divide the compilation flow into two stages(which we borrowed from rollup) - Build Stage and Generate Stage.
 
-## 5.1 Build Stage
+### 5.1 Build Stage
+The goal of `Build Stage` is to build a `ModuleGraph`.
 
-## 5.2 Generate Stage
+Starting from the user configured compilation entry, resolving, loading, transforming and parsing the entry module, then analyze its dependencies and do the same operation for the dependencies again util all related modules handled.
+
+Each module's building flow as flow.
+```txt
+./index.html -> resolve -> load -> transform -> parse -> moduleParsed -> analyzeDeps
+```
+
+Each module will build in a separate thread in a thread pool, and after `analyzeDeps` we back to resolve again of each dependency...
+
+Detailed module building steps as flow:
+1. Resolving all entries in `config.input` in parallel, using `config.root` as `importer`, return each entry's `resolved path` and properties(like side effects, external and so on). If `external` is true, throw an error, cause the entry can not be excluded. And the entry is always treated as `side effects` no matter what the resolve returns (we will discuss the details in the tree shaking RFC).
+2. 
+
+TODO: hooks details here
+
+### 5.2 Generate Stage
+
+## 6. Plugin System
+We have designed all hooks in last section, this section we'll discuss how to register, load and execute Farm's plugin.
+
+## 7. Cache System
+> We only introduce our goal of the cache system here, we will design the details in a separate RFC.
+
+## 8. Module Merging And Resource Generation
+> We only introduce our goal of the module merging strategy here, we will design the details in a separate RFC.
 
 
 # Prior art
