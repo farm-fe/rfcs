@@ -13,7 +13,11 @@
     "serde",
     "dylib",
     "struct",
-    "rkyv"
+    "rkyv",
+    "Hoistable",
+    "IIFE",
+    "typeof",
+    "tapable"
   ],
   "ignorePaths": [
     "pnpm-lock.yaml",
