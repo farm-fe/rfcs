@@ -6,15 +6,17 @@
 This is an RFC to design how to implement a super fast web compiler with Typescript and Rust. The new designed compiler should inherit all advantages of existing tools like webpack and vite, but avoid their disadvantages and extremely faster.
 
 # Motivation
-As the web project scales, building performance has been the major bottleneck, a web project compilation using webpack may cost 10min or more, a hmr update may cost 5s or more, heavily reduced the efficiency.
+As the web project scales, building performance has been the major bottleneck, a web project compilation using webpack may cost 10min or more, a hmr update may cost 10s or more, heavily reduced the efficiency.
 
-So some tools like vite came out, but vite is using native esm and unbundled in dev mode, the huge numbers of module requests becomes the new bottleneck. And vite is so fast as it uses esbuild which is written in go, which takes performance advantages of the native. But esm is not available for legacy browsers and esbuild is not strong enough to be used in production for now, so vite uses rollup as bundler in production to solve compatibility issue and esbuild stabilization issue, which brings new issues, for example, the dev and prod's behavior maybe greatly different, and rollup is written in Typescript and greatly slower than esbuild.
+So some tools like vite came out, but vite is using native esm and unbundled in dev mode, the huge numbers of module requests becomes the new bottleneck, it may crash the network panel when there are thousands of module requests.
+
+And vite is so fast as it uses esbuild which is written in go, which takes performance advantages of the native. But esm is not available for legacy browsers and esbuild is not strong enough to be used in production for now, so vite uses rollup as bundler in production to solve compatibility issue and esbuild stabilization issue, which brings new problems, for example, the dev and prod's behavior maybe greatly different, and rollup is greatly slower than esbuild as it's written in Typescript.
 
 Actually we can take advantages of both webpack and vite, and avoid all of their disadvantages. Webpack is slow, we can use system level language (Rust) to greatly improve building performance; Vite is unbundled which means the caching can be finer than webpack, but it has problems like inconsistency(dev and prod) and huge requests(may slow down resource loading even crash browser), we can use some module merging strategy to reduce the request numbers without losing cache granularity.
 
-As we discussed above, Farm is a web building tool aim to be faster(both building performance and resources loading performance) and more consistent, take advantages of existing tools and discard their disadvantages. But Farm is not aim to be a universal bundler, we just focus on web project compiling, which means our inputs are mainly web assets html, js/jsx/ts/tsx, css/scss/less, png/svg/... and so on, and every design we made will be browser first. Though universal bundler is not our first goal, you can achieve whatever you want by plugins.
+As we discussed above, Farm is a web building tool aim to be faster(both building performance and resources loading performance) and more consistent, take advantages of existing tools and discard their disadvantages. Farm team will focus on web project compiling at present, which means our inputs are mainly web assets html, js/jsx/ts/tsx, css/scss/less, png/svg/... and so on, and every design we made will be browser first. Though universal bundler(bundle everything together and output various format) is not our first goal currently, you can achieve whatever you want by plugins.
 
-Our goal is to design a really modern web compiler which is super fast, stable, and meant to be the real next generation web build engine.
+Our goal is to design a real modern web compiler which is super fast, stable, consistent, compatible, and modern web tech first. What we want is the true next generation building tool.
 
 > Note: this RFC mainly covers the architecture, the details of each part will be split to a separate RFC.
 
@@ -212,7 +214,7 @@ pub struct CompilationContext {
 
 Other data structures like module_graph or resource_graph are constructed during the compilation lifecycle of the Farm core.
 
-The details of each field of `CompilationContext` will be introduced in a separate RFC, for example, `ModuleGraph` and `ModuleGroupMap` are related to `module merging algorithm` and `CacheManager` is related to `cache system`. We only cover the goal in the RFC.
+The details of each field of `CompilationContext` will be introduced in a separate RFC, for example, `ModuleGraph` and `ModuleGroupMap` are related to `module merging algorithm` and `CacheManager` is related to `cache system`. We only cover its goal in this RFC.
 
 ## 5. Compilation Flow And Plugin Hooks
 The compilation flow is all about hooks, see the graph below for details:
@@ -251,5 +253,3 @@ We have designed all hooks in last section, this section we'll discuss how to re
 > We only introduce our goal of the module merging strategy here, we will design the details in a separate RFC.
 
 
-# Prior art
-See details in [Motivation](#motivation). Webpack is really slow as it is written by js, Vite is fast but We think it has many drawbacks. So We created Farm.
