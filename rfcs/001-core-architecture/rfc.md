@@ -24,10 +24,10 @@ Our goal is to design a real modern web compiler which is super fast, stable, co
 This section provides a user level view of Farm.
 
 Farm will be divided into two parts:
-- **Compilation core implemented by Rust**: All the compilation flow like resolving, loading, transforming, parsing and dependencies analyzing are charged by Rust compilation core. The Rust core is not visible to users, it is used privately by Farm's npm packages.
-- **CLI and Node API implemented by Typescript**: For the users, they only need to install Farm's npm packages which are written in typescript, then all functionalities are available. The npm packages encapsulate the Rust core and provide CLI and Node API for users.
+- **Compilation core implemented by Rust**: All the compilation flow like resolving, loading, transforming, parsing and dependencies analyzing are charged by Rust compilation core. The Rust core is not visible to users, it is used privately by Farm's npm packages. Only a few apis exported from the core for Rust plugin authors.
+- **CLI and Node API implemented by Typescript**: For the users, they only need to install Farm's npm packages which are written in typescript, then all functionalities are available. The npm packages encapsulate the Rust core and provide CLI and Node API for users. And all plugins are distributed as npm packages too.
 
-All performance sensitive actions will be implemented in Rust, and others will be implemented in typescript. Using typescript because farm can easily share js community, for example dev-server middleware. And the users should only care about the npm packages.
+All performance sensitive actions will be implemented in Rust, and others will be implemented in typescript. Using typescript because farm want to easily share js community, for example dev-server middleware and transformer(less, markdown and so on). And the users should only care about the npm packages.
 
 Farm npm packages is designed to provide two kind of usages: CLI or Node Api, CLI is provided by the farm team to use farm easily; Node Api is provided for the advanced developers who want to build tools on top of Farm.
 
@@ -217,11 +217,14 @@ Other data structures like module_graph or resource_graph are constructed during
 The details of each field of `CompilationContext` will be introduced in a separate RFC, for example, `ModuleGraph` and `ModuleGroupMap` are related to `module merging algorithm` and `CacheManager` is related to `cache system`. We only cover its goal in this RFC.
 
 ## 5. Compilation Flow And Plugin Hooks
-The compilation flow is all about hooks, see the graph below for details:
+We divide the compilation flow into two stages(which we borrowed from rollup) - Build Stage and Generate Stage, and the compilation flow is all about hooks, see the graph below for details:
 
 TODO: need hook flows here
 
-We divide the compilation flow into two stages(which we borrowed from rollup) - Build Stage and Generate Stage.
+There three kinds of hooks (the same as rollup):
+* `first`: The hooks execute in serial, and return immediately when a hook returns `non-null` value. (The `null` means `null` and undefined in js, `None` in rust).
+* `serial`: The hooks execute in serial, and every hook's result will pass to the next hook, using the last hook's result as final result.
+* `parallel`: The hooks execute in parallel in a thread pool, and should be isolate.
 
 ### 5.1 Build Stage
 The goal of `Build Stage` is to build a `ModuleGraph`.
@@ -233,13 +236,139 @@ Each module's building flow as flow.
 ./index.html -> resolve -> load -> transform -> parse -> moduleParsed -> analyzeDeps
 ```
 
-Each module will build in a separate thread in a thread pool, and after `analyzeDeps` we back to resolve again of each dependency...
+Each module will build in a separate thread in a thread pool, and after `analyzeDeps` we back to resolve again for each dependency.
 
-Detailed module building steps as flow:
-1. Resolving all entries in `config.input` in parallel, using `config.root` as `importer`, return each entry's `resolved path` and properties(like side effects, external and so on). If `external` is true, throw an error, cause the entry can not be excluded. And the entry is always treated as `side effects` no matter what the resolve returns (we will discuss the details in the tree shaking RFC).
-2. 
+5. Transforming the parsed module, the `SWC plugins` executed in this stage, which can access and modify internal SWC ast
+6. Analyzing dependencies of the module.
+7. Back to 1, resolving all dependencies of the module.
 
-TODO: hooks details here
+#### 5.1.1 Resolve
+The resolve hook is charge of Resolving a module, return its id and related properties. See the hook definition, parameter and result below:
+
+* **`Hook Kind`**: `first`
+  
+```rust
+fn resolve(
+ &self,
+ _param: &PluginResolveHookParam,
+ _context: &Arc<CompilationContext>,
+) -> Result<Option<PluginResolveHookResult>> {
+ // ...
+}
+
+/// Parameter of the resolve hook
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename = "camelCase")]
+pub struct PluginResolveHookParam {
+  /// the specifier would like to resolve, for example, './index'
+  pub specifier: String,
+  /// the start location to resolve `specifier`, being [None] if resolving a entry or resolving a hmr update.
+  pub importer: Option<String>,
+  /// for example, [ResolveKind::Import] for static import (`import a from './a'`)
+  pub kind: ResolveKind,
+  /// if this hook is called by the compiler, its value is [None]
+  /// if this hook is called by other plugins, its value is set by the caller plugins.
+  pub caller: Option<String>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename = "camelCase", default)]
+pub struct PluginResolveHookResult {
+  /// resolved id, normally a resolved path.
+  pub id: String,
+  /// whether this module should be external, if true, the module won't present in the final result
+  pub external: bool,
+  /// whether this module has side effects, affects tree shaking
+  pub side_effects: bool,
+  /// the package.json of the resolved id, if [None], using root package.json(where farm.config placed) by default
+  pub package_json_info: Option<Value>,
+  /// the query parsed from specifier, for example, query should be `{ inline: true }` if specifier is `./a.png?inline`
+  /// if you custom plugins, your plugin should be responsible for parsing query
+  /// if you just want a normal query parsing like the example above, [crate::utils::parse_query] is for you
+  pub query: HashMap<String, String>,
+}
+```
+
+#### 5.1.2 Load
+Loading the module's content based on `id`, return **String** based content. If load binary content like images, it should be encoded to String first (usually base64). We force to use String because of the serialization, the value should be easy to pass to the js plugins and rust plugin, so we force it be serializable.
+
+* **`Hook Kind`**: `first`
+
+```rust
+fn load(
+ &self,
+ _param: &PluginLoadHookParam,
+ _context: &Arc<CompilationContext>,
+) -> Result<Option<PluginLoadHookResult>> {
+ Ok(None)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename = "camelCase")]
+pub struct PluginLoadHookParam<'a> {
+  pub id: &'a str,
+  pub query: HashMap<String, String>,
+  /// if this hook is called by the compiler, its value is [None]
+  /// if this hook is called by other plugins, its value is set by the caller plugins.
+  pub caller: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename = "camelCase")]
+pub struct PluginLoadHookResult {
+  /// the source content of the module
+  pub source: String,
+  /// the type of the module, for example [ModuleType::Js] stands for a normal javascript file,
+  /// usually end with `.js` extension
+  pub module_type: ModuleType,
+}
+```
+
+#### 5.1.3 Transform
+Transforming the module's content base on `loaded source content`, the transforming is String in and String out. If you want to share Farm's internal ast, you can use `SWC plugins`
+
+* **`Hook Kind`**: `serial`
+
+```rust
+fn transform(
+  &self,
+  _param: &PluginTransformHookParam,
+  _context: &Arc<CompilationContext>,
+) -> Result<Option<PluginTransformHookResult>> {
+  Ok(None)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename = "camelCase")]
+pub struct PluginTransformHookParam<'a> {
+  /// source content after load or transformed result of previous plugin
+  pub source: String,
+  /// module type after load
+  pub module_type: ModuleType,
+  pub id: &'a str,
+  pub query: HashMap<String, String>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename = "camelCase", default)]
+pub struct PluginTransformHookResult {
+  /// transformed source content, will be passed to next plugin.
+  pub source: String,
+  /// you can change the module type after transform.
+  pub module_type: Option<ModuleType>,
+  /// transformed source map, all plugins' transformed source map will be stored as a source map chain.
+  pub source_map: Option<String>,
+}
+```
+
+#### 5.4 Parse
+Parsing the module's content to a internal `Module` instance, parsing source code to ast and so on.
+
+* **`Hook Kind`**: `serial`
+
+```rust
+
+```
 
 ### 5.2 Generate Stage
 
