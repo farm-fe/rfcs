@@ -29,7 +29,7 @@ Farm will be divided into two parts:
 
 All performance sensitive actions will be implemented in Rust, and others will be implemented in typescript. Using typescript because farm want to easily share js community, for example dev-server middleware and transformer(less, markdown and so on). And the users should only care about the npm packages.
 
-Farm npm packages is designed to provide two kind of usages: CLI or Node Api, CLI is provided by the farm team to use farm easily; Node Api is provided for the advanced developers who want to build tools on top of Farm.
+Farm npm packages are designed to provide two kinds of usages: CLI or Node Api, CLI is provided by the farm team to use farm easily; Node Api is provided for the advanced developers who want to build tools on top of Farm.
 
 ## 1. CLI Usage
 Two kind of official cli provided: `create-farm-app` for creating a farm project with official templates and `@farmfe/cli` for starting or building a farm project.
@@ -190,8 +190,8 @@ impl Plugin for MyPlugin {
   fn name(&self) -> String {
     String::from("MyPlugin")
   }
-  // access CompilationContext via param
-  fn resolve(&self, param: &PluginResolveHookParam, context: &CompilationContext) -> Result<Option<PluginResolveHookResult>> {
+  // access CompilationContext via parameter
+  fn resolve(&self, param: &PluginResolveHookParam, context: &Arc<CompilationContext>) -> Result<Option<PluginResolveHookResult>> {
     // ..
   }
 }
@@ -375,8 +375,67 @@ Parsing the module's content to a internal `Module` instance, parsing source cod
 ## 6. Plugin System
 We have designed all hooks in last section, this section we'll discuss how to register, load and execute Farm's plugin.
 
+Farm plans to support two kinds of plugins:
+* **Rust Plugin**: Written in Rust and distributed as dynamic library, provide the best performance and can implement all compilation hooks. Which is the recommended way to write plugins.
+* **JS Plugin**: Written in Javascript(Typescript) and distributed as NodeJs executable script file. It will slow down the compilation process and can only implement limited hooks. Farm support Js Plugins because Farm wants to share existing community tools written in Js/Ts, as many web tools (for example, less) do not have a Rust version for now.
+
+### Rust Plugin
+Rust plugins are our first goal cause it's fast and powerful, but when we encounter some ability that Rust ecosystem do not provide, Js Plugins would be the fallback.
+
+Using `dynamic library`(`.dylib` on macos, `.dll` on windows and `.so` on linux) to distribute Rust Plugin because it is the most performant way, we investigate many methods but none of them are suitable:
+* **abi_stable**: A Rust library support FFI safe calling, but we have to use its primitive std types(like `RString` to replace std `String`), and these types are not rkyv serializable (Serialize is necessary for supporting Persist Cache). We will have a hard work if we have to support both.
+* **wasm**: This is what SWC currently used, the advantage of wasm plugin is that it's portable and performant. But wasm runtime can not shared memory with Rust, need to serialize and copy to the wasm runtime and copy back to Rust and deserialize after plugin execution. The hooks may be called thousands of times and it is really inefficient. Also wasm plugins do not support parallel well, it is hard to make sure the CompilationContext consistent between threads, especially we need to serialize/deserialize it.
+
+So we decided to choose plain `dynamic library` to support Rust Plugin. We loaded the dynamic library and execute it as a internal plugin, thus we can avoid many problems above:
+* **best performant**: the dynamic library plugin is execute as the same fast as internal plugin, as we can share memory and fully parallelize.
+* **single type**: we do not need to provide extra types for dynamic library plugin.
+
+But there are problems we need to resolve:
+* **cross platform distribute**: the dynamic library plugin is not portable, it needs to be built separately for different platforms, when built on one machine, it needs cross-compile.
+* **shared type memory layout**: we shared the same type as internal plugins for dynamic library plugins, but if the types changed, the plugins needs to rebuild too, as their memory layout changed, if the plugin is not rebuilt, a `segment fault error` thrown.
+
+We solve the problem above as follow:
+* **provide portable cross-compile tool**: we'll provide a independent tool for building and publish plugin, the plugin author only needs to use something like `farm plugin build`, `farm plugin plugin`, then Farm will handle all the details.
+* **minimize the shared type and makes sure it's stable**: we only expose the necessary types to plugin, and the mutable part will be something like `Custom(Box<dyn Any>)`, so the types will rarely change once it's stable. And we also record the version of current types, if we really need to change the types, we'll bump the type schema version and inform users to upgrade their legacy plugins.
+
+### Js Plugin
+We only plan to provide limited js plugin support, which means the js plugin can only implement `build_start`, `resolve`, `load` and `transform`, `build_end`, `finish` hook. Because data transform between rust and js is expensive, if we send all data like ModuleGraph to the js side, it will greatly slow slow down the compilation, which violates our goal.
+
+And the js plugin should specify the `filters` field too, to specify which module it is willing to process, we add this limitation for performance too.
+
+A example Js plugin:
+```js
+export default {
+  name: 'js-plugin', // plugin name
+  priority: 10, // priority, controls the execute order of plugins
+  resolve: {
+    // specify the target module this plugin wants to process
+    filters: {
+      importers: [],
+      specifiers: ['from_js_plugin'],
+    },
+    // hook callback
+    executor: async (param, context) => {
+      console.log(param, context);
+
+      if (!param.caller) {
+        const resolved = await context.resolve({
+          ...param,
+          specifier: './from_js_plugin',
+          caller: 'js-plugin',
+        });
+        console.log('call internal resolve in js', resolved);
+        resolved.id += '.js-plugin';
+        return resolved;
+      }
+    },
+  },
+},
+```
+
 ## 7. Cache System
 > We only introduce our goal of the cache system here, we will design the details in a separate RFC.
+
 
 ## 8. Module Merging And Resource Generation
 > We only introduce our goal of the module merging strategy here, we will design the details in a separate RFC.
