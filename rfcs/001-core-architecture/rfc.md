@@ -214,12 +214,12 @@ pub struct CompilationContext {
 
 Other data structures like module_graph or resource_graph are constructed during the compilation lifecycle of the Farm core.
 
-The details of each field of `CompilationContext` will be introduced in a separate RFC, for example, `ModuleGraph` and `ModuleGroupMap` are related to `module merging algorithm` and `CacheManager` is related to `cache system`. We only cover its goal in this RFC.
+The details of each field of `CompilationContext` will be introduced in a separate RFC, for example, `ModuleGraph` and `ModuleGroupMap` are related to `module merging algorithm` and `CacheManager` is related to `cache system`.
 
 ## 5. Compilation Flow And Plugin Hooks
 We divide the compilation flow into two stages(which we borrowed from rollup) - Build Stage and Generate Stage, and the compilation flow is all about hooks, see the graph below for details:
 
-TODO: need hook flows here
+![plugin-hooks](./resources/plugin-system.png)
 
 There three kinds of hooks (the same as rollup):
 * `first`: The hooks execute in serial, and return immediately when a hook returns `non-null` value. (The `null` means `null` and undefined in js, `None` in rust).
@@ -231,16 +231,12 @@ The goal of `Build Stage` is to build a `ModuleGraph`.
 
 Starting from the user configured compilation entry, resolving, loading, transforming and parsing the entry module, then analyze its dependencies and do the same operation for the dependencies again util all related modules handled.
 
-Each module's building flow as flow.
+Each module's building flow as follow.
 ```txt
-./index.html -> resolve -> load -> transform -> parse -> moduleParsed -> analyzeDeps
+./index.html -> resolve -> load -> transform -> parse -> moduleParsed -> analyzeDeps ----> resolve deps recursively
 ```
 
 Each module will build in a separate thread in a thread pool, and after `analyzeDeps` we back to resolve again for each dependency.
-
-5. Transforming the parsed module, the `SWC plugins` executed in this stage, which can access and modify internal SWC ast
-6. Analyzing dependencies of the module.
-7. Back to 1, resolving all dependencies of the module.
 
 #### 5.1.1 Resolve
 The resolve hook is charge of Resolving a module, return its id and related properties. See the hook definition, parameter and result below:
@@ -361,16 +357,152 @@ pub struct PluginTransformHookResult {
 }
 ```
 
-#### 5.4 Parse
+#### 5.1.4 Parse
 Parsing the module's content to a internal `Module` instance, parsing source code to ast and so on.
 
-* **`Hook Kind`**: `serial`
+* **`Hook Kind`**: `first`
 
 ```rust
+fn parse(
+  &self,
+  _param: &PluginParseHookParam,
+  _context: &Arc<CompilationContext>,
+) -> Result<Option<Module>> {
+  Ok(None)
+}
 
+pub struct PluginParseHookParam {
+  /// resolved id
+  pub id: String,
+  /// resolved query
+  pub query: HashMap<String, String>,
+  pub module_type: ModuleType,
+  /// source content(after transform)
+  pub source: String,
+  /// source map chain after transform
+  pub source_map_chain: Vec<String>,
+  /// resolved side effects
+  pub side_effects: bool,
+  /// resolved package.json
+  pub package_json_info: Value,
+  /// if this hook is called by the compiler, its value is [None]
+  /// if this hook is called by other plugins, its value is set by the caller plugins.
+  pub caller: Option<String>,
+}
+```
+
+#### 5.1.5 Process Module
+Process and transform the module, may change any property of the module, for example, transform the parsed ast (using swc transformer and swc plugins).
+
+* **`Hook Kind`**: `serial`
+```rust
+fn process_module(
+  &self,
+  _module: &mut Module,
+  _context: &Arc<CompilationContext>,
+) -> Result<Option<()>> {
+  Ok(None)
+}
+```
+
+#### 5.1.6 Analyze Deps
+Analyzing the dependencies of each module. For example, for `import a from './a'`, the result should be `{ specifier: './a', kind: ResolveKind::Import }`
+
+* **`Hook Kind`**: `serial`
+```rust
+fn analyze_deps(
+  &self,
+  _param: &mut PluginAnalyzeDepsHookParam,
+  _context: &Arc<CompilationContext>,
+) -> Result<Option<()>> {
+  Ok(None)
+}
 ```
 
 ### 5.2 Generate Stage
+The goal of generate stage is generating deployable resources (js, html, css, wasm and so on).
+
+The generation flow as follow:
+```plain
+ModuleGraph generated in build stage ---> optimize_module_graph -> analyze_module_graph -> merge module -> process_resource_graph ---> for each resource in parallel ---> render_resource -> optimize_resource -> generate_resource_file -> write_resource_file
+```
+
+The detailed hooks as below:
+```rust
+/// Some optimization of the module graph should be performed here, for example, tree shaking, scope hoisting
+  fn optimize_module_graph(
+    &self,
+    _module_graph: &RwLock<ModuleGraph>,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<()>> {
+    Ok(None)
+  }
+
+  /// Analyze module group based on module graph
+  fn analyze_module_graph(
+    &self,
+    _module_graph: &RwLock<ModuleGraph>,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<ModuleGroupMap>> {
+    Ok(None)
+  }
+
+  /// Merging modules of the module group map to [crate::resource::resource_graph::ResourceGraph]
+  fn merge_modules(
+    &self,
+    _module_group: &ModuleGroupMap,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<ResourceGraph>> {
+    Ok(None)
+  }
+
+  /// process resource graph before render and generating each resource
+  fn process_resource_graph(
+    &self,
+    _resource_graph: &RwLock<ResourceGraph>,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<()>> {
+    Ok(None)
+  }
+
+  /// Render the [Resource] in [ResourceGraph].
+  /// May merge the module's ast in the same resource to a single ast and transform the output format to custom module system and ESM
+  fn render_resource(
+    &self,
+    _resource: &mut Resource,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<()>> {
+    Ok(None)
+  }
+
+  /// Optimize the final resource, for example, minimize every resource in the resource graph
+  fn optimize_resource(
+    &self,
+    _resource: &mut Resource,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<()>> {
+    Ok(None)
+  }
+
+  /// Generate resources based on the [ResourceGraph]
+  /// This hook is executed in serial and should update the content inside ResourceGraph
+  fn generate_resource(
+    &self,
+    _resource_graph: &mut Resource,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<()>> {
+    Ok(None)
+  }
+
+  /// Write the final output [Resource] to disk or not
+  fn write_resource_file(
+    &self,
+    _resource: &Resource,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<()>> {
+    Ok(None)
+  }
+```
 
 ## 6. Plugin System
 We have designed all hooks in last section, this section we'll discuss how to register, load and execute Farm's plugin.
@@ -379,7 +511,7 @@ Farm plans to support two kinds of plugins:
 * **Rust Plugin**: Written in Rust and distributed as dynamic library, provide the best performance and can implement all compilation hooks. Which is the recommended way to write plugins.
 * **JS Plugin**: Written in Javascript(Typescript) and distributed as NodeJs executable script file. It will slow down the compilation process and can only implement limited hooks. Farm support Js Plugins because Farm wants to share existing community tools written in Js/Ts, as many web tools (for example, less) do not have a Rust version for now.
 
-### Rust Plugin
+### 6.1 Rust Plugin
 Rust plugins are our first goal cause it's fast and powerful, but when we encounter some ability that Rust ecosystem do not provide, Js Plugins would be the fallback.
 
 Using `dynamic library`(`.dylib` on macos, `.dll` on windows and `.so` on linux) to distribute Rust Plugin because it is the most performant way, we investigate many methods but none of them are suitable:
@@ -398,7 +530,7 @@ We solve the problem above as follow:
 * **provide portable cross-compile tool**: we'll provide a independent tool for building and publish plugin, the plugin author only needs to use something like `farm plugin build`, `farm plugin plugin`, then Farm will handle all the details.
 * **minimize the shared type and makes sure it's stable**: we only expose the necessary types to plugin, and the mutable part will be something like `Custom(Box<dyn Any>)`, so the types will rarely change once it's stable. And we also record the version of current types, if we really need to change the types, we'll bump the type schema version and inform users to upgrade their legacy plugins.
 
-### Js Plugin
+### 6.2 Js Plugin
 We only plan to provide limited js plugin support, which means the js plugin can only implement `build_start`, `resolve`, `load` and `transform`, `build_end`, `finish` hook. Because data transform between rust and js is expensive, if we send all data like ModuleGraph to the js side, it will greatly slow slow down the compilation, which violates our goal.
 
 And the js plugin should specify the `filters` field too, to specify which module it is willing to process, we add this limitation for performance too.
@@ -409,7 +541,7 @@ export default {
   name: 'js-plugin', // plugin name
   priority: 10, // priority, controls the execute order of plugins
   resolve: {
-    // specify the target module this plugin wants to process
+    // specify the target modules this plugin wants to process
     filters: {
       importers: [],
       specifiers: ['from_js_plugin'],
@@ -436,8 +568,22 @@ export default {
 ## 7. Cache System
 > We only introduce our goal of the cache system here, we will design the details in a separate RFC.
 
+The goal of `Cache System` is to provide a universal cache across the whole compilation flow, which means:
+* It covers HMR, the HMR process only update some necessary module in the ModuleGraph and final resources, other module will remain unchanged as they hit cache.
+* It covers `Compilation flow Cache`, this means a module only be processed once.
+* It covers `Disk Cache`, this means the cache can be serialized to disk and restore from disk, providing similar ability like webpack5's persist cache.
+
+With the cache system, Farm can provide extremely fast experience for HMR, and hot start with cache.
+
+The cache ability is designed in `CacheManager`, we will cover details in a separate RFC.
 
 ## 8. Module Merging And Resource Generation
 > We only introduce our goal of the module merging strategy here, we will design the details in a separate RFC.
 
+Farm use `Module Merging` instead of `Bundling` cause we are `unbundled` first, Farm only merges modules together when the request numbers of module exceeds the request number limit. We have done a lot of tests and the result shows that 20-30 requests will be the most performant in modern browsers. When there are thousands of modules, we will merge the thousands of modules into 20-30 resources using our optimized strategy.
 
+For the Module Merging strategy, Farm will make sure that:
+* All shared module and dynamic module wound be in a separate resource as possible. This is similar to code split in traditional bundlers but we will control more precisely what are the modules in each resource.
+* Related modules would be in the same resource as possible, for example, the modules under the same directory, they are more related as developer usually put all related assets together.
+
+And also, the developer can config which modules should be merged together. We will cover the details in a separate RFC.
