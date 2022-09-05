@@ -5,7 +5,16 @@
   // language - current active spelling language
   "language": "en",
   // words - list of words to be always considered correct
-  "words": ["esbuild", "pnpm", "farmfe", "roadmap", "serde", "dylib", "struct"],
+  "words": [
+    "esbuild",
+    "pnpm",
+    "farmfe",
+    "roadmap",
+    "serde",
+    "dylib",
+    "struct",
+    "rkyv"
+  ],
   "ignorePaths": [
     "pnpm-lock.yaml",
     "**/package.json",
