@@ -10,11 +10,11 @@ start_date: '2022-07-18'
 
 ## Summary
 
-This RFC describes a runtime module management system to load, register and initialize modules in browsers and Node.js for Farm.
+This RFC describes a runtime module management system to load, register, and initialize modules in browsers and Node.js for Farm.
 
 ## Motivation
 
-Since modules need to be bundled when been distributed in browsers, modules from source code have to be merged into a limited number of chunks, besides, native module features are not available in all versions of browsers and Node.js, a emulated module system is required.
+Since modules need to be bundled when distributed in browsers, modules from source code have to be merged into a limited number of chunks. Additionally, native module features are not available in all versions of browsers and Node.js, so an emulated module system is required.
 
 ## Overview
 
@@ -28,25 +28,25 @@ This RFC contains:
 
 Terms:
 
-- **ECMAScript modules**: modules that satisfies [ECMAScript Specification](https://tc39.es/ecma262/#sec-modules)
-- **CommonJS modules**: modules that satisfies [CommonJS Specification](https://wiki.commonjs.org/wiki/Modules/1.1)
-- **Resource**: files that contains any type of modules created, transformed and merged by Farm
-- **Module specifications**: describes how modules are managed, common specifications: ECMAScript modules, CommonJS, AMD, UMD
+- **ECMAScript modules**: modules that satisfy the [ECMAScript Specification](https://tc39.es/ecma262/#sec-modules)
+- **CommonJS modules**: modules that satisfy the [CommonJS Specification](https://wiki.commonjs.org/wiki/Modules/1.1)
+- **Resource**: files that contain any type of modules created, transformed, and merged by Farm
+- **Module specifications**: descriptions of how modules are managed; common specifications include ECMAScript modules, CommonJS, AMD, and UMD
 - **Legacy browsers**: browsers that do not support ECMAScript modules
 
 ## Detailed Design
 
 ### Module system
 
-Module system is an object containing several methods that can be used to create, delete, or update modules or cache of a modules.
+The module system is an object containing several methods that can be used to create, delete, or update modules or cache of modules.
 
 #### Module system acquisition
 
-Module system instance **MUST** be acquired via a function which is exposed in global object (`globalThis`).
+A module system instance **MUST** be acquired via a function exposed in the global object (`globalThis`).
 
-The default name of this function is `__acquire_farm_module_system__`, the name of the function can be configured via a global variable named `__farm_module_system_acquisition_name__`. For example, if `globalThis.__farm_module_system_acquisition_name__` is `foo`, then the name of the module system acquisition function is `foo`.
+The default name of this function is `__acquire_farm_module_system__`. The name of the function can be configured via a global variable named `__farm_module_system_acquisition_name__`. For example, if `globalThis.__farm_module_system_acquisition_name__` is `foo`, then the name of the module system acquisition function is `foo`.
 
-Module system acquisition function uses singleton to expose API, for one acquisition function name, only one instance will be returned, regardless how many times this function are called.
+The module system acquisition function uses a singleton to expose the API. For one acquisition function name, only one instance will be returned, regardless of how many times this function is called.
 
 ```js
 globalThis.__acquire_farm_module_system__ = (function () {
@@ -64,13 +64,13 @@ globalThis.__acquire_farm_module_system__ = (function () {
 
 #### Module instance
 
-Before call module initialization function, a module instance **MUST** be created, every module instance has the following properties:
+Before calling the module initialization function, a module instance **MUST** be created. Every module instance has the following properties:
 
 - **id**: a string representing the id of the module
-- **exports**: an object where module exports its bindings
-- **meta**: an object works like `import.meta`
-- **loaded**: an boolean value indicating whether this module is loaded
-- **error**: an Error instance if there is an error during the initialization of this module or `null` if initialization succeed
+- **exports**: an object where the module exports its bindings
+- **meta**: an object that works like `import.meta`
+- **loaded**: a boolean value indicating whether this module is loaded
+- **error**: an Error instance if there is an error during the initialization of this module, or `null` if the initialization succeeds
 
 The definition of modules:
 
@@ -86,7 +86,7 @@ interface Module {
 
 #### Module initialization function
 
-A module will be transformed to a **sync** or an **async** module initialization function, its body is the module content, when a module is `import`ed/`require`d, the module initialization function will be called.
+A module will be transformed into a **sync** or an **async** module initialization function, with its body containing the module content. When a module is `import`ed/`require`d, the module initialization function will be called.
 
 Module initialization functions take three arguments:
 
@@ -94,7 +94,7 @@ Module initialization functions take three arguments:
 - **`exports`**: the exports object of the module
 - **`__farm_require__`**: the require function, used to require other modules
 
-Module initialization function has no return value, after the function is executed, the `exports` object should contain all exported bindings of the module, or an error will be thrown if something goes wrong during initialization.
+The module initialization function has no return value. After the function is executed, the `exports` object should contain all exported bindings of the module, or an error will be thrown if something goes wrong during initialization.
 
 The definition of module initialization functions is:
 
@@ -118,11 +118,11 @@ const modules = {
 
 #### Module system architecture
 
-Module system consists of three parts:
+The module system consists of three parts:
 
 - **module initialization functions map**: an object containing initialization functions of all modules
 - **cached modules map**: an object containing all cached modules
-- **loaded resources map**: an object containing all resources' id which have been loaded (only for legacy browsers)
+- **loaded resources map**: an object containing all resources' ids that have been loaded (only for legacy browsers)
 
 ```ts
 // pseudo code
@@ -141,7 +141,7 @@ class ModuleSystem {
 
 #### Module system API
 
-Here is the APIs exposed by module system:
+Here are the APIs exposed by the module system:
 
 ```ts
 interface ModuleSystem {
@@ -155,7 +155,7 @@ interface ModuleSystem {
 
 #### Module system API alias
 
-For a smaller production size, every API has an short-name alias:
+For a smaller production size, every API has a short-name alias:
 
 - `require` → `r`
 - `register` → `g`
@@ -165,36 +165,36 @@ For a smaller production size, every API has an short-name alias:
 
 #### Module states
 
-Modules have four states: **unregistered**, **registered**, **initialized** and **failed**:
+Modules have four states: **unregistered**, **registered**, **initialized**, and **failed**:
 
-- **unregistered**: the module is not registered yet, this state can **ONLY** turn into **registered** state
-- **registered**: the module is registered, this state can **ONLY** turn into **initialized** or **failed** state
-- **initialized**: the module is initialized, this state is final state and **MUST NOT** be changed
-- **failed**: the module is failed to initialize due to syntax or runtime error, this state is final state and **MUST NOT** be changed
+- **unregistered**: the module is not registered yet; this state can **ONLY** turn into **registered** state
+- **registered**: the module is registered; this state can **ONLY** turn into **initialized** or **failed** state
+- **initialized**: the module is initialized; this state is final and **MUST NOT** be changed
+- **failed**: the module failed to initialize due to syntax or runtime errors; this state is final and **MUST NOT** be changed
 
 ```plain
                           initialized
                          ↗
-unregistered → registered 
+unregistered → registered
                          ↘
                           failed
 ```
 
 ### Plugin system
 
-Since module system is simulated, some features that originally provided by host have to be implemented by runtime module system, for example, `import.meta` object. Hot Module Replacement (aka HMR) relies on `import.meta.hot` or `module.hot` to work properly, to make features like HMR work, a plugin system is needed.
+Since the module system is simulated, some features that are originally provided by the host have to be implemented by the runtime module system, for example, the `import.meta` object. Hot Module Replacement (aka HMR) relies on `import.meta.hot` or `module.hot` to work properly. To make features like HMR work, a plugin system is needed.
 
-A runtime module plugin is able to access the module instance before or after module initialization function is called, so a plugin can modify the properties of the module instance, for example, `module.meta`, `module.exports`.
+A runtime module plugin can access the module instance before or after the module initialization function is called, allowing a plugin to modify the properties of the module instance, such as `module.meta` and `module.exports`.
 
 #### Hook lifecycle
 
-A runtime module plugin can also intercept the module activities via hooks. There are five hooks:
+A runtime module plugin can intercept module activities via hooks. There are five hooks:
 
-- `function bootstrap(ms: ModuleSystem): void`: invoked when the module system is bootstrapped, this hook will only be invoked once
-- `function create(module: Module): Module`: invoked when new module instances are created, this hook will only be invoked once
-- `function initialize(module: Module): Module`: invoked when module initialization functions are called, this hook will be invoked every time a module initialization function is called
-- `function error(module: Module, error: Error): void`: invoked when module initialization function calls fail, this hook will be invoked every time when error is thrown during module initialization function execution
-- `function cacheRead(importer: Module | null, imported: Module): Module | null`: invoked when module caches are read, this hook will be invoked every time a module cache is read
+- `function bootstrap(ms: ModuleSystem): void`: invoked when the module system is bootstrapped; this hook will only be invoked once
+- `function create(module: Module): Module`: invoked when new module instances are created; this hook will only be invoked once
+- `function initialize(module: Module): Module`: invoked when module initialization functions are called; this hook will be invoked every time a module initialization function is called
+- `function error(module: Module, error: Error): void`: invoked when module initialization function calls fail; this hook will be invoked every time an error is thrown during module initialization function execution
+- `function cacheRead(importer: Module | null, imported: Module): Module | null`: invoked when module caches are read; this hook will be invoked every time a module cache is read
 
 Below is a module's lifecycle:
 
@@ -219,10 +219,10 @@ globalThis.__acquire_farm_module_system__().hooks.create.tap(fn);
 
 #### Hook type
 
-Although all hooks are synchronous, every hook's function are called in the order they are tapped, there are still two types of hooks: **basic** and **waterfall**.
+Although all hooks are synchronous, every hook's function is called in the order they are tapped. There are still two types of hooks: **basic** and **waterfall**.
 
-- **Basic hook**: calls every function one by one, in the order of they are tapped
-- **Waterfall hook**: calls every function one by one, but every function is called with the return value of last call, except the first call
+- **Basic hook**: calls every function one by one, in the order they are tapped
+- **Waterfall hook**: calls every function one by one, but every function is called with the return value of the last call, except for the first call
 
 ```js
 // pseudo code
@@ -233,7 +233,7 @@ waterfallHooks.reduce((acc, fn) => fn(acc), initialArg);
 
 #### Plugin registration
 
-Plugins have to be registered before entry point module is loaded, or a plugin will not able to access every module's activities, to avoid that, plugin register method will throw error after entry point module has been initialized.
+Plugins must be registered before the entry point module is loaded, or a plugin will not be able to access every module's activities. To avoid that, the plugin register method will throw an error after the entry point module has been initialized.
 
 ```js
 // pseudo code
@@ -249,17 +249,13 @@ globalThis.__acquire_farm_module_system__().hooks.bootstrap.tap(plugin); // erro
 
 ### Module specification
 
-Farm uses CommonJS module specification to manage modules. ECMAScript modules will be transformed to CommonJS-like modules, details see below.
-
-#### ECMAScript module transformation
-
-ECMAScript modules will be transformed to CommonJS-like modules, `import`, `import()` and `export` will be replaced with `require()`, `Promise.resolve(require())` and `exports[exportName]` respectively.
+Farm uses the CommonJS module specification to manage modules. ECMAScript modules will be transformed into CommonJS-like modules, with `import`, `import()` and `export` replaced by `require()`, `Promise.resolve(require())`, and `exports[exportName]` respectively.
 
 > Note: `require` below will be replaced with Farm's actual require implementation of runtime module management.
 
 #### `import` and `export` statements
 
-The following is the relationship between ECMAScript modules' `import`/`export` statements and CommonJS modules's `require`/`exports[exportName]`:
+The following is the relationship between ECMAScript modules' `import`/`export` statements and CommonJS modules' `require`/`exports[exportName]`:
 
 - _ImportDeclaration_:
   - `import` _ImportClause_ _FromClause_
@@ -328,15 +324,15 @@ The following is the relationship between ECMAScript modules' `import`/`export` 
 
 #### `import()` calls
 
-`import()` calls will be transformed to `Promise.resolve(require('IDENTIFIER'))`, the result of `require('IDENTIFIER')` should be a instant module (if module required has been registered) or a promise that resolves to a module (if module required has not been registered).
+`import()` calls will be transformed to `Promise.resolve(require('IDENTIFIER'))`. The result of `require('IDENTIFIER')` should be an instant module (if the required module has been registered) or a promise that resolves to a module (if the required module has not been registered).
 
 #### Top-level await export
 
-Top-level await export is introduced in ES2022, which allows the usage of `await` in the top-level of modules. This enables modules to act like async functions, you can `await` promises in modules.
+Top-level await export is introduced in ES2022, which allows the usage of `await` at the top level of modules. This enables modules to act like async functions, allowing you to `await` promises in modules.
 
 Since this feature is introduced in ES2022, legacy browsers do not support it, but it can be simulated with some techniques.
 
-For normal modules, corresponding transformed initialization functions are sync functions, while for modules used top-level await, corresponding transformed initialization functions are async functions, see example below.
+For normal modules, the corresponding transformed initialization functions are sync functions, while for modules using top-level await, the corresponding transformed initialization functions are async functions. See the example below.
 
 Source code of sync modules:
 
@@ -356,7 +352,7 @@ Transformed module initialization function:
 }
 ```
 
-Source code of modules used top-level await:
+Source code of modules using top-level await:
 
 ```js
 // bar.async.js
@@ -375,9 +371,9 @@ Transformed module initialization function:
 }
 ```
 
-Modules importing modules using top-level await have to be transformed to async modules as well, see example below.
+Modules importing modules using top-level await have to be transformed to async modules as well. See the example below.
 
-Source code of modules imported modules which used top-level await:
+Source code of modules importing modules that used top-level await:
 
 ```js
 // foo.async.js
@@ -436,15 +432,15 @@ Transformed module initialization function:
 
 #### `import.meta`
 
-`import.meta` is a host provided meta-property containing a set of properties decided by host environment.
+`import.meta` is a host-provided meta-property containing a set of properties determined by the host environment.
 
-In browsers support ECMAScript modules and Node.js natively support ECMAScript modules, there is a `import.meta.url` property indicating the url (for browsers) or file path (for Node.js) of the module.
+In browsers that support ECMAScript modules and Node.js with native ECMAScript module support, there is an `import.meta.url` property indicating the URL (for browsers) or file path (for Node.js) of the module.
 
 > For details, see the [proposal](https://github.com/tc39/proposal-import-meta).
 
-In compile time, `import.meta` will be replaced with `module.meta`. `module.meta` is an object created with `null` prototype. By default, `module.meta` has only one property: `url`.
+In compile time, `import.meta` will be replaced with `module.meta`.  `module.meta` is an object created with a `null` prototype. By default, `module.meta` has only one property: `url`.
 
-If resource is an ECMAScript module, `import.meta.url` will be assigned to `module.meta.url`, if resource is not an ECMAScript module, `document.currentScript.src` will be assigned to `module.meta.url` during module registration.
+If the resource is an ECMAScript module, `import.meta.url` will be assigned to `module.meta.url`. If the resource is not an ECMAScript module, `document.currentScript.src` will be assigned to `module.meta.url` during module registration.
 
 Example of ECMAScript modules:
 
@@ -462,14 +458,14 @@ Transformed resource:
 ```js
 {
   'main.js': function(module, exports) {
-    // this line is injected by compiler
+    // this line is injected by the compiler
     module.meta.url = import.meta.url; // use import.meta.url directly
     console.log(module.meta.url);
   }
 }
 ```
 
-Example of non ECMAScript modules:
+Example of non-ECMAScript modules:
 
 Source code:
 
@@ -499,20 +495,19 @@ Transformed resource:
 
 ### Resource
 
-**Resources** are files that contains code which may include many modules. A script resource has many module initialization functions and a style resource may only contain CSS code.
-
+**Resources** are files that contain code, which may include many modules. A script resource has many module initialization functions, and a style resource may only contain CSS code.
 
 #### Resource type
 
-There are two types of resources, **initial resources** and **async resources**. **initial resources** are essential for entry module to run, while **async resources** are loaded asynchronously according to some conditions.
+There are two types of resources: **initial resources** and **async resources**. **Initial resources** are essential for the entry module to run, while **async resources** are loaded asynchronously based on certain conditions.
 
 **Initial resources** will be loaded in HTML with `<script>` tags, while **async resources** will be loaded with `import()` calls (for modern browsers and Node.js) or dynamically added `<script>` elements (for legacy browsers).
 
 #### Resource kind
 
-There are tow kinds of resource: **script** and **style**.
+There are two kinds of resources: **script** and **style**.
 
-An example of script resource:
+An example of a script resource:
 
 ```js
 (function (modules, url) {
@@ -529,7 +524,7 @@ An example of script resource:
 }, document.currentScript.src)
 ```
 
-An example of style resource:
+An example of a style resource:
 
 ```css
 body {
@@ -539,7 +534,7 @@ body {
 
 ##### Resource loading
 
-Every module will be bundled into a resource. Dynamically imported modules will be loaded in a resource which resource name is determined during compilation. For example, if a script module `foo.js` is dynamically imported, and it's bundled into resource `resource.js`, the importing code may look like this:
+Every module will be bundled into a resource. Dynamically imported modules will be loaded in a resource whose resource name is determined during compilation. For example, if a script module `foo.js` is dynamically imported, and it's bundled into resource `resource.js`, the importing code may look like this:
 
 ```js
 // source code
@@ -549,7 +544,7 @@ import foo from './foo';
 loadResource('resource.js').then(() => require('./foo'));
 ```
 
-For style resource, it will be imported like this:
+For style resources, they will be imported like this:
 
 ```js
 // source code
@@ -563,39 +558,40 @@ where function `loadResource` will create a `link` element and insert it into th
 
 #### Resource states
 
-Resources have four states: **unloaded**, **loading**, **loaded** and **failed**:
+Resources have four states: **unloaded**, **loading**, **loaded**, and **failed**:
 
-- **unloaded**: the resource is not loaded yet, this state can **ONLY** turn into **loading** state
-- **loading**: the resource is loading, this state can **ONLY** turn into **loaded** or **failed** state
-- **loaded**: the resource is loaded successfully, this state is final state and **MUST NOT** be changed
-- **failed**: the resource is failed to load due to network error or other reasons, this state is final state and **MUST NOT** be changed
+- **unloaded**: the resource is not loaded yet; this state can **ONLY** turn into **loading** state
+- **loading**: the resource is loading; this state can **ONLY** turn into **loaded** or **failed** state
+- **loaded**: the resource is loaded successfully; this state is the final state and **MUST NOT** be changed
+- **failed**: the resource failed to load due to network error or other reasons; this state is the final state and **MUST NOT** be changed
 
 ```plain
                      loaded
                    ↗
-unloaded → loading 
+unloaded → loading
                    ↘
                      failed
 ```
 
 #### Resource loading strategies
 
-There may be many resources, each resource contains one or more modules, a resource may import one or more other modules, which are located in other resources, for modern browsers and Node.js, using host provided module system to load resources is much more stable and reliable than manually management, while for older browsers, a fallback module system is used.
+There may be many resources, each resource contains one or more modules, a resource may import one or more other modules, which are located in other resources. For modern browsers and Node.js, using the host-provided module system to load resources is much more stable and reliable than manually managing them. However, for older browsers, a fallback module system is used.
 
-An application is loaded in following steps:
+An application is loaded in the following steps:
 
 1. Farm generates an HTML file that contains initial resources and bootstrap code
-2. After browser parsed HTML, initial resources will be loaded
+2. After the browser parses the HTML, initial resources will be loaded
    1. If initial resources are loaded successfully, modules contained in these resources will be registered
-   2. If initial resource cannot be loaded successfully, error will be thrown
-3. After all initial resources are loaded and modules are registered, bootstrap code will load entry point module
-4. During entry point module execution, more modules will be loaded, for every module:
-   1. If module has been initialized before, return cached module reference
-   2. If module has been initialized before but ended with error, throw error
-   3. If module has been registered but not initialized, try to initialize module
-      1. If module initialization is successful, save it in cache and return module reference
-      2. If module initialization is not successful, throw error and save error in cache
-   4. If module has not been registered, find out which resource contains this module, load the resource, after the resource is loaded, try to initialize module
+   2. If the initial resource cannot be loaded successfully, an error will be thrown
+3. After all initial resources are loaded and modules are registered, the bootstrap code will load the entry point module
+4. During the entry point module execution, more modules will be loaded. For every module:
+   1. If the module has been initialized before, return the cached module reference
+   2. If the module has been initialized before but ended with an error, throw the error
+   3. If the module has been registered but not initialized, try to initialize the module
+      1. If module initialization is successful, save it in cache and return the module reference
+      2. If module initialization is not successful, throw the error and save the error in cache
+   4. If the module has not been registered, find out which resource contains this module, load the resource, and after the resource is loaded, try to initialize the module
+
 
 #### Example
 
@@ -664,7 +660,7 @@ import('ops.js').then(() => console.log(__acquire_farm_module_system__().require
 
 ##### Legacy browsers
 
-It's almost identical to load initial resources with modern browsers in legacy browsers, but there are still two differences, one is that resources are not modules any more, so the attribute `type="module"` is absent, second is that dynamically added `<script>` elements is used to asynchronously load dynamic imported resources.
+It's almost identical to load initial resources with modern browsers in legacy browsers, but there are still two differences, one is that resources are not modules any more, so the attribute `type="module"` is absent, second is that dynamically added `<script>` elements are used to asynchronously load dynamic imported resources.
 
 ```js
 // baz.js
