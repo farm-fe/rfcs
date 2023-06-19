@@ -113,7 +113,7 @@ pub struct CompilationContext {
 
 ## 5. 编译流程和插件钩子
 
-我们将编译流程分为了两个阶段 (借鉴于 Rollup) - 构建阶段和生成阶段, 所有编辑流程都是基于 hooks 完成的, 详见下图
+我们将编译流程分为了两个阶段 (借鉴于 Rollup) - 构建阶段和生成构建产物阶段, 所有编辑流程都是基于 hooks 完成的, 详见下图
 
 ![plugin-hooks](./resources/plugin-system.png)
 
@@ -125,4 +125,306 @@ pub struct CompilationContext {
 
 * `parallel`: 这些 hook 在线程池中并行执行，并应该被隔离。
 
-接下来我们来详细讲解这两个阶段
+接下来我们来介绍一下这两个阶段
+
+### 5.1 构建阶段
+
+构建阶段的目标是去构建出一套模块依赖图。
+从入口配置文件开始解析, 加载, 转换并且解析入口模块, 然后分析依赖, 并且对所有依赖模块进行相同的操作, 直到所有模块都被解析完毕。
+每个模块的构建流程如下:
+
+```txt
+
+./index.html -> 解析 -> 加载 -> 转换 -> 语法分析 -> 解析模块 -> 分析依赖关系 ----> 递归地解决依赖关系
+
+```
+每个模块由线程池中的单独线程构建, 在分析依赖关系之后, 我们将再次返回解析其他依赖项
+
+#### 5.1.1 Resolve
+
+resolve 钩子负责模块解析, 返回当前模块的 id 以及其他的相关属性, 请参阅以下钩子定义, 参数 结果如下
+
+* **`Hook Kind`**: `first`
+
+```rust
+fn resolve(
+  &self,
+  _param: &PluginResolveHookParam,
+  _context: &Arc<CompilationContext>,
+  _hook_context: &PluginHookContext,
+) -> Result<Option<PluginResolveHookResult>> {
+  // ...
+}
+
+/// Parameter of the resolve hook
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename = "camelCase")]
+pub struct PluginResolveHookParam {
+  /// the source would like to resolve, for example, './index'
+  pub source: String,
+  /// the start location to resolve `specifier`, being [None] if resolving an entry or resolving an HMR update.
+  pub importer: Option<ModuleId>,
+  /// for example, [ResolveKind::Import] for static import (`import a from './a'`)
+  pub kind: ResolveKind,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename = "camelCase", default)]
+pub struct PluginResolveHookResult {
+  /// resolved path, normally a resolved path.
+  pub resolved_path: String,
+  /// whether this module should be external, if true, the module won't be present in the final result
+  pub external: bool,
+  /// whether this module has side effects, affects tree shaking
+  pub side_effects: bool,
+  /// the query parsed from specifier, for example, query should be `{ inline: true }` if specifier is `./a.png?inline`
+  /// if you have custom plugins, your plugin should be responsible for parsing the query
+  /// if you just want a normal query parsing like the example above, [farmfe_toolkit::resolve::parse_query] should be helpful
+  pub query: HashMap<String, String>,
+}
+```
+
+#### 5.1.2 Load
+
+根据 `id` 加载模块的内容, 返回基于 **String** 的内容, 如果加载类似像图片这样的二进制内容, 则应该首先将其编码为 **base64** 字符串, 我们强制使用字符串, 因为使用序列化可以更好的把值传递到 JS 插件和 Rust 插件中。
+
+* **`Hook Kind`**: `first`
+
+```rust
+fn load(
+  &self,
+  _param: &PluginLoadHookParam,
+  _context: &Arc<CompilationContext>,
+  _hook_context: &PluginHookContext,
+) -> Result<Option<PluginLoadHookResult>> {
+  // ..
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename = "camelCase")]
+pub struct PluginLoadHookParam<'a> {
+  /// the resolved path from resolve hook
+  pub resolved_path: &'a str,
+  /// the query map
+  pub query: HashMap<String, String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename = "camelCase")]
+pub struct PluginLoadHookResult {
+  /// the source content of the module
+  pub content: String,
+  /// the type of the module, for example [ModuleType::Js] stands for a normal JavaScript file,
+  /// usually ending with `.js` extension
+  pub module_type: ModuleType,
+}
+```
+
+#### 5.1.3 Transform
+
+根据 `加载的资源` 转换的模块内容, 转换为字符串输入和字符串输出, 如果您想要共享 Farm 中的内部 `AST` 可以是用 `SWC` 插件
+
+```rust
+fn transform(
+  &self,
+  _param: &PluginTransformHookParam,
+  _context: &Arc<CompilationContext>,
+) -> Result<Option<PluginTransformHookResult>> {
+  // ..
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename = "camelCase")]
+pub struct PluginTransformHookParam<'a> {
+  /// source content after load or transformed result of the previous plugin
+  pub content: String,
+  /// module type after load
+  pub module_type: ModuleType,
+  /// resolved path from resolve hook
+  pub resolved_path: &'a str,
+  /// query from resolve hook
+  pub query: HashMap<String, String>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename = "camelCase", default)]
+pub struct PluginTransformHookResult {
+  /// transformed source content, will be passed to the next plugin.
+  pub content: String,
+  /// you can change the module type after transform.
+  pub module_type: Option<ModuleType>,
+  /// transformed source map, all plugins' transformed source map will be stored as a source map chain.
+  pub source_map: Option<String>,
+}
+```
+
+#### 5.1.4 Parse
+
+将模块的内容解析为内部“Module”实例，将源代码转换为AST等
+
+* **`Hook Kind`**: `first`
+
+```rust
+fn parse(
+  &self,
+  _param: &PluginParseHookParam,
+  _context: &Arc<CompilationContext>,
+  _hook_context: &PluginHookContext,
+) -> Result<Option<ModuleMetaData>> {
+  // ..
+}
+
+#[derive(Debug)]
+pub struct PluginParseHookParam {
+  /// module id
+  pub module_id: ModuleId,
+  /// resolved path
+  pub resolved_path: String,
+  /// resolved query
+  pub query: HashMap<String, String>,
+  pub module_type: ModuleType,
+  /// source content(after transform)
+  pub content: String,
+}
+```
+
+#### 5.1.5 Process Module
+
+流程模块的作用是处理和转换模块, 可能会更改模块的任何属性，例如，转换解析后的AST(使用SWC转换器和SWC插件)。
+
+* **`Hook Kind`**: `serial`
+```rust
+fn process_module(
+  &self,
+  _module: &mut PluginProcessModuleHookParam,
+  _context: &Arc<CompilationContext>,
+) -> Result<Option<()>> {
+  // ..
+}
+
+pub struct PluginProcessModuleHookParam<'a> {
+  pub module_id: &'a ModuleId,
+  pub module_type: &'a ModuleType,
+  pub meta: &'a mut ModuleMetaData,
+}
+```
+
+#### 5.1.6 Analyze Deps
+
+分析每个模块之间的依赖关系, 例如，`import a from './a'`, 转换之后的结果应该是 `{ specifier: './a', kind: ResolveKind::Import }`
+
+* **`Hook Kind`**: `serial`
+```rust
+fn analyze_deps(
+  &self,
+  _param: &mut PluginAnalyzeDepsHookParam,
+  _context: &Arc<CompilationContext>,
+) -> Result<Option<()>> {
+  // ..
+}
+
+pub struct PluginAnalyzeDepsHookParam<'a> {
+  pub module: &'a Module,
+  /// analyzed deps from previous plugins, if you want to analyze more deps, you must push new entries to it.
+  pub deps: Vec<PluginAnalyzeDepsHookResultEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename = "camelCase")]
+pub struct PluginAnalyzeDepsHookResultEntry {
+  /// the source would like to resolve, for example, './index'
+  pub source: String,
+  /// the start location to resolve `specifier`, being [None] if resolving an entry or resolving an HMR update.
+  pub importer: Option<ModuleId>,
+  /// for example, [ResolveKind::Import] for static import (`import a from './a'`)
+  pub kind: ResolveKind,
+}
+```
+
+### 5.2 生成阶段
+
+生成阶段的目标是尽可能高效地生成可部署资源（如js、html、css、wasm）等其他资源。
+
+流程如下: 
+
+```plain
+ModuleGraph generated in build stage ---> optimize_module_graph -> analyze_module_graph -> partial bundle module -> process_resource_graph ---> for each resource in parallel ---> render_resource -> optimize_resource -> generate_resource_file -> write_resource_file
+```
+
+每类钩子代码如下:
+
+```rust
+/// Some optimization of the module graph should be performed here, for example, tree shaking, scope hoisting
+  fn optimize_module_graph(
+    &self,
+    _module_graph: &RwLock<ModuleGraph>,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<()>> {
+    Ok(None)
+  }
+
+  /// Analyze module group based on module graph
+  fn analyze_module_graph(
+    &self,
+    _module_graph: &RwLock<ModuleGraph>,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<ModuleGroupMap>> {
+    Ok(None)
+  }
+
+  /// Partial Bundling modules of the module group map to [crate::resource::resource_graph::ResourceGraph]
+  fn partial_bundle_modules(
+    &self,
+    _module_group: &ModuleGroupMap,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<ResourceGraph>> {
+    Ok(None)
+  }
+
+  /// process resource graph before render and generating each resource
+  fn process_resource_graph(
+    &self,
+    _resource_graph: &RwLock<ResourceGraph>,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<()>> {
+    Ok(None)
+  }
+
+  /// Render the [Resource] in [ResourceGraph].
+  /// May merge the module's ast in the same resource to a single ast and transform the output format to custom module system and ESM
+  fn render_resource(
+    &self,
+    _resource: &mut Resource,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<()>> {
+    Ok(None)
+  }
+
+  /// Optimize the final resource, for example, minimize every resource in the resource graph
+  fn optimize_resource(
+    &self,
+    _resource: &mut Resource,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<()>> {
+    Ok(None)
+  }
+
+  /// Generate resources based on the [ResourceGraph]
+  /// This hook is executed in serial and should update the content inside ResourceGraph
+  fn generate_resource(
+    &self,
+    _resource_graph: &mut Resource,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<()>> {
+    Ok(None)
+  }
+
+  /// Write the final output [Resource] to disk or not
+  fn write_resource_file(
+    &self,
+    _resource: &Resource,
+    _context: &Arc<CompilationContext>,
+  ) -> Result<Option<()>> {
+    Ok(None)
+  }
+```
