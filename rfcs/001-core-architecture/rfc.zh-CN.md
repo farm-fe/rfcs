@@ -4,7 +4,7 @@
 
 # 总结
 
-这个RFC设计了使用Typescript和Rust实现极速的Web编译器。该编译器设计继承现有工具（如webpack和vite）的优点，同时避免它们的缺点并且将会更加高效。
+本RFC设计使用Typescript和Rust实现极速的Web编译器。该编译器设计继承现有工具（如webpack和vite）的优点，同时避免它们的缺点并且将会更加高效。
 
 # 动机
 
