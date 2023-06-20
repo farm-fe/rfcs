@@ -4,7 +4,7 @@
   </a>
   <h1>Farm RFC</h1>
   <h3>
-    <a href="https://github.com/farm-fe/rfcs/blob/main/rfcs/001-core-architecture/rfc.md">简体中文</a>   |
+    <a href="https://github.com/farm-fe/rfcs/blob/main/rfcs/001-core-architecture/rfc.md">English</a>   |
     <a href="https://github.com/farm-fe/rfcs/blob/main/rfcs/001-core-architecture/rfc.zh-CN.md">简体中文</a>  
   </h3>
   <br/>
