@@ -469,7 +469,7 @@ Rust 插件是 Farm 插件的主要方向, 因为它们快速并且强大, 但�
 
 ### 6.2 JS 插件
 
-我们对 JS 的插件支持比较有限, 导致目前 JS 插件只能实现`Build_start`、`Resolve`、`load`、`Trans`、`Build_end`和`finish`钩子。由于 Rust 和 JS 之间的数据转换代价很高，如果我们将所有像 ModuleGraph 这样的数据发送到 JS 端，将显著减慢编译速度，这违背了我们的意愿。
+我们对 JS 的插件支持比较有限, 导致目前 JS 插件只能实现`build_start`、`resolve`、`load`、`transform`、`build_end`和`finish`钩子。由于 Rust 和 JS 之间的数据转换代价很高，如果我们将所有像 ModuleGraph 这样的数据发送到 JS 端，将显著减慢编译速度，这违背了我们的意愿。
 
 并且 JS 插件也应该指定`filters`字段，以指定它愿意处理哪个模块。出于性能原因，我们也添加了此限制。
 
@@ -535,7 +535,7 @@ Farm 使用 `Partial Bundling` 而不是 `Bundling`，因为我们首先是`Unbu
 
 Farm 的设计被分为两个部分
 
-- **Rust 实现的编译核心**：所有的解析、加载、转换、解析、依赖分析、代码优化/生成等编译流程都由 Rust 负责。铁锈部分对用户不可见，它由 Farm 的 NPM 包私下使用。只有几个 API 是从内核为 Rust 插件导出的。
+- **Rust 实现的编译核心**：所有的解析、加载、转换、解析、依赖分析、代码优化/生成等编译流程都由 Rust 负责。Rust部分对用户不可见，它由 Farm 的 NPM 包私下使用。只有几个 API 是从内核为 Rust 插件导出的。
 
 - **通过 TypeScrip 实现的 CLI 和 Node API**：对于用户来说，只需要安装 Farm 的 npm 包，这些 npm 包是用 TypeScrip 编写的，就可以使用所有功能了。NPM 包封装了 Rust 内核，为用户提供了 CLI 和 Node API。所有插件也都是以 npm 包的形式分发的。
 
