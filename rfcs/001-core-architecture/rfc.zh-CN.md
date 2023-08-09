@@ -72,7 +72,7 @@ Farm 核心由两部分组成：
 
 编译上下文包含了整个编译过程中的所有共享信息。本小节将详细介绍编译上下文。
 
-插件可以通过钩子访问 CompilationContext。
+Rust 插件可以通过钩子访问 CompilationContext。
 
 ```rust
 struct MyPlugin {}
@@ -105,13 +105,13 @@ pub struct CompilationContext {
 
 `meta`是编译过程中共享的数据，例如 swc 的 SourceMap。插件还可以添加自定义数据并将其插入到`meta.custom`中。
 
-其他数据结构，如`module_graph`或者`resource_graph`, 是在 Farm 核心的编译生命周期内构建的。
+对于其他数据结构，如`module_graph`或者`resource_graph`, 是在 Farm 核心的编译生命周期内构建的。
 
 关于 `CompilationContext` 的每个字段的详细信息将在单独的 RFC 中介绍。例如， `ModuleGraph` 和 `ModuleGroupMap` 与 `partial bundling algorithm` 关联, `CacheManager` 与缓存系统关联。
 
 ## 5. 编译流程和插件钩子
 
-我们将编译流程分为了两个阶段 (借鉴于 Rollup) - 构建阶段和生成构建产物阶段, 所有编辑流程都是基于 hooks 完成的, 详见下图
+我们将编译流程(借鉴于 Rollup)分为了两个阶段 - 构建阶段和生成构建产物阶段, 所有编辑流程都是基于 hooks 完成的, 详见下图
 
 ![plugin-hooks](./resources/plugin-system.png)
 
@@ -131,11 +131,7 @@ pub struct CompilationContext {
 从入口配置文件开始解析, 加载, 转换并且解析入口模块, 然后分析依赖, 并且对所有依赖模块进行相同的操作, 直到所有模块都被解析完毕。
 每个模块的构建流程如下:
 
-```txt
-
-./index.html -> 解析 -> 加载 -> 转换 -> 语法分析 -> 解析模块 -> 分析依赖关系 ----> 递归地解决依赖关系
-
-```
+`./index.html -> 解析 -> 加载 -> 转换 -> 语法分析 -> 解析模块 -> 分析依赖关系 ----> 递归地解决依赖关系`
 
 每个模块由线程池中的单独线程构建, 在分析依赖关系之后, 我们将再次返回解析其他依赖项
 
@@ -185,7 +181,7 @@ pub struct PluginResolveHookResult {
 
 #### 5.1.2 Load
 
-根据 `id` 加载模块的内容, 返回基于 **String** 的内容, 如果加载类似像图片这样的二进制内容, 则应该首先将其编码为 **base64** 字符串, 我们强制使用字符串, 因为使用序列化可以更好的把值传递到 JS 插件和 Rust 插件中。
+根据 `id` 加载模块的内容, 返回基于 **String** 的内容, 如果加载类似像图片这样的二进制内容, 则应该首先将其编码为 **base64** 字符串, Farm 强制使用字符串, 因为使用序列化可以更好的把值传递到 JS 插件和 Rust 插件中。
 
 - **`Hook Kind`**: `first`
 
@@ -221,7 +217,7 @@ pub struct PluginLoadHookResult {
 
 #### 5.1.3 Transform
 
-根据 `加载的资源` 转换的模块内容, 转换为字符串输入和字符串输出, 如果您想要共享 Farm 中的内部 `AST` 可以是用 `SWC` 插件
+根据在 Load 中转换出来的模块内容, 转换为字符串输入和字符串输出, 如果您想要共享 Farm 中的内部 `AST` 可以使用 `SWC` 插件
 
 ```rust
 fn transform(
@@ -259,7 +255,7 @@ pub struct PluginTransformHookResult {
 
 #### 5.1.4 Parse
 
-将模块的内容解析为内部“Module”实例，将源代码转换为 AST 等
+将模块的内容解析为内部“Module”实例，将源代码转换为 AST。
 
 - **`Hook Kind`**: `first`
 
@@ -348,9 +344,9 @@ pub struct PluginAnalyzeDepsHookResultEntry {
 
 流程如下:
 
-```plain
+`
 ModuleGraph generated in build stage ---> optimize_module_graph -> analyze_module_graph -> partial bundle module -> process_resource_graph ---> for each resource in parallel ---> render_resource -> optimize_resource -> generate_resource_file -> write_resource_file
-```
+`
 
 每类钩子代码如下:
 
@@ -463,7 +459,7 @@ Rust 插件是 Farm 插件的主要方向, 因为它们快速并且强大, 但�
 
 我们解决上述问题的方法如下：
 
-- **提供可移植的交叉编译工具**：我们将提供独立的插件构建和发布工具。插件作者只需要使用`Farm Plugin`进行构建，Farm就会处理所有的细节。
+- **提供可移植的交叉编译工具**：我们将提供独立的插件构建和发布工具。插件作者只需要使用`Farm Plugin`进行构建，Farm 就会处理所有的细节。
 
 - **尽量减少共享类型，确保其稳定**：我们只将必要的类型暴露给插件，而可变部分将类似于 `Custom(Box<dyn any>)`，所以类型稳定后很少发生变化。我们还记录当前类型的版本，如果我们确实需要更改类型，我们会升级类型模式版本，并通知用户升级他们的遗留插件。
 
@@ -535,13 +531,13 @@ Farm 使用 `Partial Bundling` 而不是 `Bundling`，因为我们首先是`Unbu
 
 Farm 的设计被分为两个部分
 
-- **Rust 实现的编译核心**：所有的解析、加载、转换、解析、依赖分析、代码优化/生成等编译流程都由 Rust 负责。Rust部分对用户不可见，它由 Farm 的 NPM 包私下使用。只有几个 API 是从内核为 Rust 插件导出的。
+- **Rust 实现的编译核心**：所有的解析、加载、转换、解析、依赖分析、代码优化/生成等编译流程都由 Rust 负责。Rust 部分对用户不可见，它由 Farm 的 NPM 包私下使用。只有几个 API 是从内核为 Rust 插件导出的。
 
 - **通过 TypeScrip 实现的 CLI 和 Node API**：对于用户来说，只需要安装 Farm 的 npm 包，这些 npm 包是用 TypeScrip 编写的，就可以使用所有功能了。NPM 包封装了 Rust 内核，为用户提供了 CLI 和 Node API。所有插件也都是以 npm 包的形式分发的。
 
 所有对性能敏感的操作都将在 Rust 中实现，其他对性能要求较低的操作或者 Rust 生态系统比较薄弱的部分将在 TypeScrip 中实现。使用 TypeScript 是因为 Farm 可以轻松地共享 js 社区，例如开发服务器中间件和转换器(less、markdown 等)。用户应该只关心 npm 包。
 
-Farm 中的 npm 包旨在提供两种用法：CLI 或 Node Api，CLI 由 Farm 团队提供以方便通过命令行的方式来快速使用 Farm 的核心功能，Node Api 是为想要在Farm之上构建工具的高级开发人员提供的。
+Farm 中的 npm 包旨在提供两种用法：CLI 或 Node Api，CLI 由 Farm 团队提供以方便通过命令行的方式来快速使用 Farm 的核心功能，Node Api 是为想要在 Farm 之上构建工具的高级开发人员提供的。
 
 ## 1. CLI 的使用方式
 
@@ -582,8 +578,7 @@ export default defineConfig({
     },
     output: {
       // details will be described later...
-    },
-    // details will be described later...
+    }
   },
   // dev server config
   server: {

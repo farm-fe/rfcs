@@ -106,9 +106,9 @@ The goal of the `Build Stage` is to build a `ModuleGraph`.
 Starting from the user-configured compilation entry, resolving, loading, transforming, and parsing the entry module, then analyze its dependencies and do the same operation for the dependencies again until all related modules are handled.
 
 Each module's building flow is as follows.
-```txt
+`
 ./index.html -> resolve -> load -> transform -> parse -> moduleParsed -> analyzeDeps ----> resolve deps recursively
-```
+`
 
 Each module will build in a separate thread in a thread pool, and after `analyzeDeps`, we return to resolve again for each dependency.
 
@@ -313,9 +313,9 @@ pub struct PluginAnalyzeDepsHookResultEntry {
 The goal of generate stage is to generate deployable resources (js, html, css, wasm, and so on) as efficiently as possible.
 
 The generation flow:
-```plain
+`
 ModuleGraph generated in build stage ---> optimize_module_graph -> analyze_module_graph -> partial bundle module -> process_resource_graph ---> for each resource in parallel ---> render_resource -> optimize_resource -> generate_resource_file -> write_resource_file
-```
+`
 
 The detailed hooks are as follows:
 ```rust
