@@ -584,26 +584,26 @@ unloaded → loading
 
 #### Resource 加载策略
 
-There may be many resources, each resource contains one or more modules, a resource may import one or more other modules, which are located in other resources. For modern browsers and Node.js, using the host-provided module system to load resources is much more stable and reliable than manually managing them. However, for older browsers, a fallback module system is used.
+可能会有许多资源，每个资源包含一个或多个模块，一个资源可以导入一个或多个其他模块，这些模块位于其他资源中。对于现代浏览器和 Node.js 来说，使用主机提供的模块系统来加载资源比手动管理这些资源要稳定可靠得多。然而，对于旧版浏览器来说，会采用备用的模块系统。
 
-An application is loaded in the following steps:
+一个应用的加载分为以下步骤：
 
-1. Farm generates an HTML file that contains initial resources and bootstrap code
-2. After the browser parses the HTML, initial resources will be loaded
-   1. If initial resources are loaded successfully, modules contained in these resources will be registered
-   2. If the initial resource cannot be loaded successfully, an error will be thrown
-3. After all initial resources are loaded and modules are registered, the bootstrap code will load the entry point module
-4. During the entry point module execution, more modules will be loaded. For every module:
-   1. If the module has been initialized before, return the cached module reference
-   2. If the module has been initialized before but ended with an error, throw the error
-   3. If the module has been registered but not initialized, try to initialize the module
-      1. If module initialization is successful, save it in cache and return the module reference
-      2. If module initialization is not successful, throw the error and save the error in cache
-   4. If the module has not been registered, find out which resource contains this module, load the resource, and after the resource is loaded, try to initialize the module
+1. Farm 生成一个包含初始资源和引导代码的 HTML 文件。
+2. 浏览器解析 HTML 后，将加载初始资源。
+   1. 如果初始资源成功加载，其中包含的模块将被注册。
+   2. 如果初始资源无法成功加载，将抛出错误。
+3. 在所有初始资源加载并且模块被注册之后，引导代码将加载入口模块。
+4. 在入口模块执行期间，会加载更多的模块。对于每个模块：
+   1. 如果模块之前已经被初始化过，则返回缓存的模块引用。
+   2. 如果模块之前已经被初始化过，但是以错误结束，会抛出错误。
+   3. 如果模块已经被注册但尚未初始化，尝试初始化该模块。
+      1. 如果模块初始化成功，将其保存在缓存中，并返回模块引用。
+      2. 如果模块初始化不成功，会抛出错误，并将错误保存在缓存中。
+   4. 如果模块尚未被注册，则找出包含该模块的资源，加载该资源，在资源加载完成后，尝试初始化该模块。
 
-#### Example
+#### 例子
 
-Say there are four resources in an application: `foo.js`, `bar.js`, `baz.js` and `ops.js`, every resource contains one or more modules:
+假设在一个应用程序中有四个资源：`foo.js`、`bar.js`、`baz.js`和`ops.js`，每个资源都包含一个或多个模块：
 
 - foo.js
   - module_a.js
@@ -615,7 +615,7 @@ Say there are four resources in an application: `foo.js`, `bar.js`, `baz.js` and
 - ops.js
   - module_d.js
 
-Relationship in diagram:
+关系图如下所示：
 
 ```plain
          main.js
@@ -627,9 +627,9 @@ module_a.js   module_b.js
               module_d.js
 ```
 
-##### Modern browsers and Node.js
+##### 现代浏览器和 Node.js 中的情况如下：
 
-HTML file will contain `foo.js` and `bar.js`, as they are **initial resources**, `baz.js` and `ops.js` will be dynamically loaded when used. The order of initial resources is sorted topologically, in this example, load `bar.js` first, then load `foo.js` later.
+HTML 文件将包含`foo.js`和`bar.js`，因为它们是初始资源，而`baz.js`和`ops.js`将在使用时动态加载。初始资源的加载顺序是经过拓扑排序的，在这个示例中，首先加载`bar.js`，然后稍后加载`foo.js`。
 
 ```html
 <html>
@@ -672,9 +672,9 @@ import("ops.js").then(() =>
 );
 ```
 
-##### Legacy browsers
+##### 旧版浏览器
 
-It's almost identical to load initial resources with modern browsers in legacy browsers, but there are still two differences, one is that resources are not modules any more, so the attribute `type="module"` is absent, second is that dynamically added `<script>` elements are used to asynchronously load dynamic imported resources.
+在旧版浏览器中，加载初始资源与现代浏览器几乎相同，但仍存在两个区别。第一个区别是，资源不再是模块，因此缺少属性`type="module"`。第二个区别是，使用动态添加的`<script>`元素来异步加载动态导入的资源。
 
 ```js
 // baz.js
