@@ -22,7 +22,12 @@ For traditional bundlers, we may have a hard time to configure complex `splitChu
 # Motivation
 
 # Design Philosophy
-To achieve our two goals(reduce request numbers and increase cache hit rate), some general optimize principles should be respected
+To achieve our two goals(reduce request numbers and increase cache hit rate), some general optimize principles should be respected:
+1. The request numbers should be limited and the size of each output resource should be close to.
+2. When changing a few modules, the impact on output resources should be as small as possible.
+
+Based on above principles, following rules are designed:
+
 1. **Mutable and immutable modules should always be in different output files**: For example, if we changed our business code, we would not expect that modules under `node_modules` are affected.
 2. **Shared modules should be in isolate output files as long as they can**: For modules shared between multiple entries or dynamic imported entries, they should be in separated output file, so we won't loading unnecessary modules when loading these files.
 3. **The max concurrent requests for a resource loading should be between 20-30**: After a lots of tests, we found that 20-30 concurrent requests have best performance when loading resources concurrently.
