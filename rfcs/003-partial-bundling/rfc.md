@@ -29,8 +29,8 @@ So I was always thinking that if there is a strategy to Avoid these two extremes
 > I renamed `Module Merging` to `Partial Bundling` later because I think `Partial Bundling` can expresses more accurately what I am thinking.
 
 But some of my friends thought that is what `splitChunks` of webpack does, but I don't think so, they are similar but their basic ideas is different:
-* Farm never tries to bundle everything together, Farm only partially bundles when necessary, and often output several limited resources.
-* Farm does bundling only for performance reason, if one day hundreds concurrent requests are not acceptable, then Farm will not bundle any more.
+* Farm does not always bundle, only if concurrent module requests exceed Farm's threshold, Farm does partial bundling only when necessary.
+* Farm does bundling only for performance reason, if one day hundreds concurrent requests are acceptable, then Farm will not bundle any more.
 
 And this foundation difference also greatly affects the chooses when implement bundling. The detailed designs will be described in following sections.
 
