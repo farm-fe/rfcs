@@ -7,6 +7,7 @@ This RFC designs Farm's Partial Bundling strategy, including:
 1. What is `Partial Bundling`
 2. The Motivation of `Partial Bundling`
 3. Internal details of `Partial Bundling`
+4. Configurations and real world examples of `Partial Bundling`
 
 # What's Partial Bundling
 `Partial Bundling` is a strategy that Farm uses to bundle modules, similar to what other bundlers do but the goal of Farm's `Partial Bundling` is different.
@@ -43,12 +44,13 @@ Based on above principles, following rules are designed:
 
 1. **Mutable and immutable modules should always be in different output files**: For example, if we changed our business code, we would not expect that modules under `node_modules` are affected.
 2. **Shared modules should be in isolate output files as long as they can**: For modules shared between multiple entries or dynamic imported entries, they should be in separated output file, so we won't loading unnecessary modules when loading these files.
-3. **The max concurrent requests for a resource loading should be between 20-30 by default**: After a lots of tests, we found that 20-30 concurrent requests have best performance when loading resources concurrently.
+3. **The target concurrent requests for a resource loading should be between 20-30 by default**: After a lots of tests, we found that 20-30 concurrent requests have best performance when loading resources concurrently.
 4. **Related modules should be in the same output file as long as they can**: For example, modules under the same package should be together, if the package is updated, then only a few output files are affected.
     * 4.1 Modules under the same package should be in the same output file.
     * 4.2 Closer module in the dependency tree should be more likely in the same output file.
 5. **Output files should be of similar size and min resource size should be greater than 20KB by default**: Avoid buckets effect and make concurrent resources loading faster.
-6. **When above rules are conflicts, more requests are preferred**: For example, if `minResourceSize` is violated due to `mutable/immutable modules`, `minResourceSize` will be ignored, because one of farm's philosophy is `Unbundled First`, we prefer more granular output files.
+6. **When above rules are conflicts, more requests are preferred by default**: For example, if `minResourceSize` is violated due to `mutable/immutable modules`, `minResourceSize` will be ignored, because one of farm's philosophy is `Unbundled First`, we prefer more granular output files by default. 
+    * This default behavior can be configured by `enforceMinResourceSize` and `enforceTargetConcurrentRequests`, but this may cause duplication, no silver bullet here, just tradeoffs.
 
 # Reference-level explanation
 This section explains the technical part of Partial Bundling.
@@ -97,17 +99,37 @@ After traversing, `Group E`, `Group G` should be added to ModuleGroups. We can s
 
 After the Groups are generated, we can get following `ModuleGroupGraph` easily by searching dynamic edges:
 
-![ModuleGroupGraph](./resources/ModuleGroupGraph.png)
+<img src="./resources/ModuleGroupGraph.png" width="400px" />
 
 Once we have this `ModuleGroupGraph`, we can known that if `A` is about to be loaded, then all modules inside `Group A`(A and C) should be loaded. And when `A` tries to dynamically imports `D` then all modules inside `Group D` should be loaded.
 
 ## Generate Module Buckets
 In above section, we get the `ModuleGroupGraph`, and we can know **which modules** should be grouped together when loading modules. Next we'll discuss how to merge modules in the same ModuleGroup.
 
-Actually we can just bundle every `Module Group` separately and everything will be fine too.
+Actually we can just bundle every `Module Group` separately and everything will be fine too. But there are two issues: module duplication and less requests numbers. As we can see, the ModuleGroups can be overlapped and a group only produces one output. More modules need to be loaded and less concurrent requests are made, it isn't performant.
 
+So a general idea flows our mind, can we just merge modules in the group to smaller structures? Of cause, and that's what I named `ModuleBucket`. See the following illustration:
+
+![ModuleBuckets](./resources/ModuleBuckets.png)
+
+To avoid duplication and only load necessary modules, we can put modules which have the same ModuleGroups together. For example, `A`, `C` are in `Group A` and `Group F`, so they are in the ModuleBuckets. and `B`, `E` are in `Group B`, `D` is is `Group B` and `Group D`, so two more ModuleBuckets are created. After processing, 6 ModuleBuckets should be created like above illustration.
+
+ModuleBucket aims to remove duplication between ModuleGroups, different ModuleBucket should produce different files. For example, when `A` tries to dynamically load `D`, then `Group D` should be loaded, and `Group D` contains `D` and `H`. But `H` can be in other group, for example, `Group G`, if `D` and `H` are in the same output file, then `Group G` will load unnecessary extra module `D`. So module `D` and `H` are in different Module Bucket.
+
+But ModuleBucket is not our final target, A ModuleBucket can also contain a lot of modules, then how to merge modules inside the same ModuleBucket is the most important thing of `Partial Bundling`, and it is also what `Partial Bundling` differs from traditional bundling.
 
 ## Generate Resource Pots
+Now we have arrived the final but most important part: generate resources based on the hard work we have done above.
+
+To satisfy the rules we defined above, I design a intermediate structure called `ModulePot`, A `ModulePot` is a fundamental unit, all modules in the same `ModulePot` are always in the same output file. `ModulePots` can be merged to satisfy our `request numbers limitation`.
+
+Resource Pot Generation Process:
 
 
-## Real World Examples
+### Create Module Pots
+
+### Merge Module Pots into Resource Pot
+
+# User Configurations design
+
+# Real World Examples
