@@ -1,6 +1,6 @@
 - Name: Farm Partial Bundling
 - Start Date: 2023-08-30
-- RFC PR: [farm-fe/rfcs#4](https://github.com/farm-fe/rfcs/pull/4)
+- RFC PR: [farm-fe/rfcs#9](https://github.com/farm-fe/rfcs/pull/4)
 
 # Summary
 This RFC designs Farm's Partial Bundling strategy, including:
@@ -15,7 +15,7 @@ This RFC designs Farm's Partial Bundling strategy, including:
 Unlike other bundlers, Farm will not trying to bundle everything together and then split them out using optimizations like `splitChunks`, on the opposite, Farm will bundle projects into several output files directly. For example, if there are hundreds of modules needed to launch a html page, Farm will try to bundle them into 20-30 output files directly. Farm calls this behavior `Partial Bundling`.
 
 Farm's goal of Partial Bundling is to:
-1. **Reduce request numbers**: Make hundreds or thousands of module requests reduce to 20-30 requests, which would make resource loading faster.
+1. **Reduce request numbers and request hierarchy**: Make hundreds or thousands of module requests reduce to 20-30 requests, and avoid loading modules one after one due to dependency hierarchy, which would make resource loading faster.
 2. **Increase cache hit rate**: When a modules changed, makes sure that only a few output files are affected, so more cache can be used for a online project.
 
 For traditional bundlers, we may have a hard time to configure complex `splitChunks` or `manualChunks` to achieve the goal above, but in Farm, it is supported natively through `Partial Bundling`.
@@ -23,15 +23,15 @@ For traditional bundlers, we may have a hard time to configure complex `splitChu
 # Motivation
 There are two main methods of handling modules in web build tools now: Bundling or native ESM. But they both have drawbacks:
 * For bundling, bundlers aim to bundle everything together and then split them out for optimization, but splitting is often hard to configure and is hard to balance resources loading performance and cache hit rate manually. 
-* For native esm, every module can be compiled, cached separately, but the load performance are heavily affected when there are hundreds of modules.
+* For native esm, every module can be compiled, cached separately, but the load performance are heavily affected when there are hundreds of module requests.
 
 So I was always thinking that if there is a strategy to avoid these two extremes - maybe we can do partial bundling? we can just bundle the project into several limited, size balanced resources directly and automatically. I named this thinking `Module Merging` - Find a balance between bundle and unbundled, only bundles a few related modules to improve loading performance without losing cache granularity.
 
-> I renamed `Module Merging` to `Partial Bundling` later because I think `Partial Bundling` can expresses more accurately what I am thinking.
+> I renamed `Module Merging` to `Partial Bundling` later because I think `Partial Bundling` can expresses more accurately what I was thinking.
 
 But some of my friends thought that is what `splitChunks` of webpack does, but I don't think so, they are similar but their basic ideas is different:
-* Farm does not always bundle, only if concurrent module requests exceed Farm's threshold, Farm does partial bundling only when necessary.
-* Farm does bundling only for performance reason, if one day hundreds concurrent requests are acceptable, then Farm will not bundle any more.
+* Farm does not always bundle, only if concurrent module requests or request hierarchy exceed Farm's threshold, Farm does partial bundling only when necessary.
+* Farm does bundling only for performance reason, if one day hundreds of concurrent ordered requests are acceptable, then Farm will not bundle any more.
 
 And this fundamental difference also greatly affects the design choices when implement bundling. The detailed designs will be described in following sections.
 
@@ -81,7 +81,7 @@ we discuss the details of each step in following sections.
 
 Assume that we already have following `ModuleGraph`:
 
-<img src="./resources/ModuleGraph.png" width="200px" />
+<img src="./resources/ModuleGraph.png" width="400px" />
 
 ## Generate Module Groups
 A new ModuleGroup is created when one of following conditions are satisfied:
@@ -110,13 +110,13 @@ Once we have this `ModuleGroupGraph`, we can known that if `A` is about to be lo
 ## Generate Module Buckets
 In above section, we get the `ModuleGroupGraph`, and we can know **which modules** should be grouped together when loading modules. Next we'll discuss how to merge modules in the same ModuleGroup.
 
-Actually we can just bundle every `Module Group` separately and everything will be fine too. But there are two issues: module duplication and less requests numbers. As we can see, the ModuleGroups can be overlapped and a group only produces one output. More modules need to be loaded and less concurrent requests are made, it isn't performant.
+Actually we can just bundle every `Module Group` separately and everything will be fine too. However, there are two issues: module duplication and less requests numbers. As we can see, the ModuleGroups can be overlapped and a group only produces one output. More modules need to be loaded and less concurrent requests are made, it isn't performant.
 
 So a general idea flows our mind, can we just merge modules in the group to smaller structures? Of cause, and that's what I named `ModuleBucket`. See the following illustration:
 
 ![ModuleBuckets](./resources/ModuleBuckets.png)
 
-To avoid duplication and only load necessary modules, we can put modules which have the same ModuleGroups together. For example, `A`, `C` are in `Group A` and `Group F`, so they are in the ModuleBuckets. and `B`, `E` are in `Group B`, `D` is is `Group B` and `Group D`, so two more ModuleBuckets are created. After processing, 6 ModuleBuckets should be created like above illustration.
+To avoid duplication and only load necessary modules, we can put modules **which have the same ModuleGroups** together. For example, `A`, `C` are in `Group A` and `Group F`, so they are in the same ModuleBucket. and `B`, `E` are in `Group B`, `D` is is `Group B` and `Group D`, so two more ModuleBuckets are created. After processing, 6 ModuleBuckets should be created like above illustration.
 
 ModuleBucket aims to remove duplication between ModuleGroups, different ModuleBucket should produce different files. For example, when `A` tries to dynamically load `D`, then `Group D` should be loaded, and `Group D` contains `D` and `H`. But `H` can be in other group, for example, `Group G`, if `D` and `H` are in the same output file, then `Group G` will load unnecessary extra module `D`. So module `D` and `H` are in different Module Bucket.
 
@@ -136,6 +136,6 @@ Resource Pot Generation Process:
 
 ### Merge Module Pots into Resource Pot
 
-# User Configurations design
+# User Configurations Design
 
 # Real World Examples
