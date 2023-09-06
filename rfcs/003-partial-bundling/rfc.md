@@ -49,7 +49,9 @@ Based on above principles, following rules are designed:
     * 4.1 Modules under the same package should be in the same output file.
     * 4.2 Closer module in the dependency tree should be more likely in the same output file.
 5. **Output files should be of similar size and min resource size should be greater than 20KB by default**: Avoid buckets effect and make concurrent resources loading faster.
-6. **When above rules are conflicts, more requests are preferred by default**: For example, if `minResourceSize` is violated due to `mutable/immutable modules`, `minResourceSize` will be ignored, because one of farm's philosophy is `Unbundled First`, we prefer more granular output files by default. 
+6. **The output files are stable**: which means, when new modules or packages are added or removed, the output won't be changed on a large scale, the influence of this addition or remove should be as small as possible.
+    * When above size rule conflict with this rule, this rule are preferred, stable output should be ensured first.
+7. **When above rules conflict, more requests are preferred by default**: For example, if `minResourceSize` is violated due to `mutable/immutable modules`, `minResourceSize` will be ignored, because one of farm's philosophy is `Unbundled First`, we prefer more granular output files by default. 
     * This default behavior can be configured by `enforceMinResourceSize` and `enforceTargetConcurrentRequests`, but this may cause duplication, no silver bullet here, just tradeoffs.
 
 # Reference-level explanation
@@ -62,7 +64,9 @@ This section explains the technical part of Partial Bundling.
 * **ModuleGroupGraph**: Graph of module groups, if any module of module group dynamically imports another module group's entry modules, then a dependency edge would be created in the graph. 
 * **ModuleBucket**: Modules which are in the Module Groups. A module can be in many Module Groups, if all the ModuleGroups of two modules are the same, then these two modules are in the same ModuleBucket.
 * **ModulePot**: Modules in the same Module Pot would always be in the same output resource. For example, modules in the same package will be in the same ModulePot if there are many packages.
-* **ResourcePot**: A Resource Pot consist of one or more Module Pot, and a Resource Pot should produce a `output resource` and a optional `.map` resource
+* **ResourcePot**: A Resource Pot consist of one or more Module Pots, and a Resource Pot should produce a `output resource` and a optional `.map` resource.
+    * The difference of `ResourcePot` and `Resource` is that `ResourcePot` is a intermediate structure, it contains AST and other property used for rendering. After rendering the `ResourcePot`, `Resources`(like `.js` and `.js.map`) will be produced 
+* **Resource**: A Resource is a final output file, like `index.js`, `index.js.map`, `index.css`, `index.html`
 
 ## Partial Bundling Process
 ![General Bundle Process](./resources/general-process.png)
@@ -119,12 +123,14 @@ ModuleBucket aims to remove duplication between ModuleGroups, different ModuleBu
 But ModuleBucket is not our final target, A ModuleBucket can also contain a lot of modules, then how to merge modules inside the same ModuleBucket is the most important thing of `Partial Bundling`, and it is also what `Partial Bundling` differs from traditional bundling.
 
 ## Generate Resource Pots
-Now we have arrived the final but most important part: generate resources based on the hard work we have done above.
+Now we have arrived the final but most important part: generate resources based on the hard work we have done above. And a Resource Pot is container contains structure of a resource and a optional sourcemap.
 
-To satisfy the rules we defined above, I design a intermediate structure called `ModulePot`, A `ModulePot` is a fundamental unit, all modules in the same `ModulePot` are always in the same output file. `ModulePots` can be merged to satisfy our `request numbers limitation`.
+> Keep the output `stable` is our most important rules defined above. So when size, requests numbers and stability conflict, `stability` will be given priority.
+
+To satisfy the rules we defined above, I design a intermediate structure called `ModulePot`, A `ModulePot` is a fundamental unit, all modules in the same `ModulePot` are always in the same output file. `ModulePots` can be merged to `ResourcePot` to satisfy our `request numbers limitation`.
 
 Resource Pot Generation Process:
-
+![ResourcePotGeneration](./resources/ResourcePotGeneration.png)
 
 ### Create Module Pots
 
