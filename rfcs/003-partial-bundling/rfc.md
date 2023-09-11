@@ -132,7 +132,17 @@ To satisfy the rules we defined above, I design a intermediate structure called 
 Resource Pot Generation Process:
 ![ResourcePotGeneration](./resources/ResourcePotGeneration.png)
 
+Resource Pot Generation Process is split into 3 steps:
+1. **Sort the ModuleGroups and ModuleBuckets**: deal with the module groups in topological order, for each module group, sort the module buckets in execution order.
+2. **Merge modules into ModulePots**: Merge related modules together and treat them as basic unit.
+3. **Merge ModulePots into ResourcePots**: Merge related modules together.
+
 ### Create Module Pots
+Module Pots are created based on following rules:
+1. Modules in the same immutable package are in the same ModulePot
+2. For other modules, on module is a module pot
+
+When we get the ModulePots, we are almost reach the last step: generate resource pot.
 
 ### Merge Module Pots into Resource Pot
 
