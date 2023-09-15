@@ -108,9 +108,10 @@ After the Groups are generated, we can get following `ModuleGroupGraph` easily b
 Once we have this `ModuleGroupGraph`, we can known that if `A` is about to be loaded, then all modules inside `Group A`(A and C) should be loaded. And when `A` tries to dynamically imports `D` then all modules inside `Group D` should be loaded.
 
 ## Generate Module Buckets
+### How To Create Module Buckets 
 In above section, we get the `ModuleGroupGraph`, and we can know **which modules** should be grouped together when loading modules. Next we'll discuss how to merge modules in the same ModuleGroup.
 
-Actually we can just bundle every `Module Group` separately and everything will be fine too. However, there are two issues: module duplication and less requests numbers. As we can see, the ModuleGroups can be overlapped and a group only produces one output. More modules need to be loaded and less concurrent requests are made, it isn't performant.
+Actually we can just bundle every `Module Group` separately and everything will be fine too. However, there are two issues: module duplication and less requests numbers. As we can see, the ModuleGroups can be overlapped, if a group only produces one output, then more modules need to be loaded and less concurrent requests are made, it isn't performant.
 
 So a general idea flows our mind, can we just merge modules in the group to smaller structures? Of cause, and that's what I named `ModuleBucket`. See the following illustration:
 
@@ -119,6 +120,19 @@ So a general idea flows our mind, can we just merge modules in the group to smal
 To avoid duplication and only load necessary modules, we can put modules **which have the same ModuleGroups** together. For example, `A`, `C` are in `Group A` and `Group F`, so they are in the same ModuleBucket. and `B`, `E` are in `Group B`, `D` is is `Group B` and `Group D`, so two more ModuleBuckets are created. After processing, 6 ModuleBuckets should be created like above illustration.
 
 ModuleBucket aims to remove duplication between ModuleGroups, different ModuleBucket should produce different files. For example, when `A` tries to dynamically load `D`, then `Group D` should be loaded, and `Group D` contains `D` and `H`. But `H` can be in other group, for example, `Group G`, if `D` and `H` are in the same output file, then `Group G` will load unnecessary extra module `D`. So module `D` and `H` are in different Module Bucket.
+
+### Deal With Different Module Types
+In Farm, we support different module type natively, like `js`, `css`, `html`. And these different module types should produce different outputs. So `module_type` should be considered when generating module buckets.
+
+And also, Farm defines `mutable` and `immutable` modules, and they should always be in different output.
+
+So actually a module bucket is create by these 3 conditions:
+* `module_type`: modules in a module bucket should have the same type
+* `immutable`: modules in a module bucket should have the same value
+* `module_groups`
+
+### Module Bucket Summary
+Farm use `module_type`, `immutable` and `module_groups` to generate a Module Bucket.
 
 But ModuleBucket is not our final target, A ModuleBucket can also contain a lot of modules, then how to merge modules inside the same ModuleBucket is the most important thing of `Partial Bundling`, and it is also what `Partial Bundling` differs from traditional bundling.
 
@@ -138,14 +152,28 @@ Resource Pot Generation Process is split into 3 steps:
 3. **Merge ModulePots into ResourcePots**: Merge related modules together.
 
 ### Create Module Pots
+For each ModuleBucket, we merge the modules in it into ModulePots.
+
 Module Pots are created based on following rules:
 1. Modules in the same immutable package are in the same ModulePot
 2. For other modules, on module is a module pot
 
-When we get the ModulePots, we are almost reach the last step: generate resource pot.
-
 ### Merge Module Pots into Resource Pot
+Now we are in the last but most important step: generating Resource Pots.
+
+TODO
 
 # User Configurations Design
+The Configurations of Partial Bundling are divide into following parts:
+1. **`targetConcurrentRequest`**: Farm tries to generate resource numbers as closer as possible to this config value for initial resource loading or a dynamic resource loading.
+2. **`minSize`**: The minimum size of generated resources. Note that `minSize` will not be satisfied if `ModuleBucket's size` is less than `minSize`, `ModuleBucket` will be given priority. Config `enforceMinSize` can be used to enforce size.
+3. **`groups`**:
+    * **test**: 
+    * **groupType**: `mutable` or `immutable`
+    * **resourceType**: `all`, `initial` or `async`
+4. **`enforceResources`**:
+5. **`enforceTargetConcurrentRequest`**: 
+6. **`enforceMinSize`**:     
+
 
 # Real World Examples
