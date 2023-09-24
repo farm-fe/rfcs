@@ -141,7 +141,13 @@ Now we have arrived the final but most important part: generate resources based 
 
 > Keep the output `stable` is our most important rules defined above. So when size, requests numbers and stability conflict, `stability` will be given priority.
 
-To satisfy the rules we defined above, I design a intermediate structure called `ModulePot`, A `ModulePot` is a fundamental unit, all modules in the same `ModulePot` are always in the same output file. `ModulePots` can be merged to `ResourcePot` to satisfy our `request numbers limitation`.
+### Generate Enforce Resources
+If user configured `enforceResources`, modules that match these rules will be merged into Resource Pot directly.
+
+Other modules will be processed by following rules.
+
+### Deal With None-EnforceResources
+To satisfy the rules we defined above, I design a intermediate structure called `ModulePot`, A `ModulePot` is a fundamental unit, all `none-enforceResources` modules in the same `ModulePot` are always in the same output file. `ModulePots` can be merged to `ResourcePot` to satisfy our `request numbers limitation` and `size limitation`.
 
 Resource Pot Generation Process:
 ![ResourcePotGeneration](./resources/ResourcePotGeneration.png)
@@ -152,28 +158,45 @@ Resource Pot Generation Process is split into 3 steps:
 3. **Merge ModulePots into ResourcePots**: Merge related modules together.
 
 ### Create Module Pots
-For each ModuleBucket, we merge the modules in it into ModulePots.
+For each ModuleBucket, we merge the modules to ModulePots.
 
 Module Pots are created based on following rules:
-1. Modules in the same immutable package are in the same ModulePot
-2. For other modules, on module is a module pot
+1. Modules matched `partialBundling.groups` will be in the same ModulePot.
+2. Modules in the same immutable package are in the same ModulePot. For example, A, B are both in `ModuleBucket_A_B` and they are also in the same immutable package, then A, B would be in the same Module Pot.
+3. For other modules, a module is a module pot
 
 ### Merge Module Pots into Resource Pot
 Now we are in the last but most important step: generating Resource Pots.
 
-TODO
+There are 3 important conditions when generating Resource Pots:
+1. **Request Numbers**: The number of resource pot in a ModuleGroup should be as close as possible to `targetConcurrentRequest`.
+2. **Minimum Resource Size**: The size of each resource pot should be larger than `targetMinSize` when possible.
+3. **Module Buckets**: Only merge Module Pot in the same Module Bucket.
+
+Illustration for Resource Pot Generation:
+![MergeModulePots](./resources/MergeModulePots.png)
+
+For above illustration, we focus on generate resource pots for `ModuleGroup B`. Steps:
+1. Merge modules in the same ModuleBucket to `ModulePots`
+2. Calculate target size of each Resource Pot based on `targetConcurrentRequest`, `targetMinSize` and `immutableModulesWeight`.
+3. For each execution-order sorted ModulePot, fill them into the a Resource Pot one by one.
+4. If `targetConcurrentRequests` or `targetMinSize` is violated and `enforceTargetConcurrentRequests` or `enforceTargetMinSize` is enabled, merge smallest resources to meet the constraints.
+
 
 # User Configurations Design
 The Configurations of Partial Bundling are divide into following parts:
-1. **`targetConcurrentRequest`**: Farm tries to generate resource numbers as closer as possible to this config value for initial resource loading or a dynamic resource loading.
-2. **`minSize`**: The minimum size of generated resources. Note that `minSize` will not be satisfied if `ModuleBucket's size` is less than `minSize`, `ModuleBucket` will be given priority. Config `enforceMinSize` can be used to enforce size.
-3. **`groups`**:
-    * **test**: 
-    * **groupType**: `mutable` or `immutable`
-    * **resourceType**: `all`, `initial` or `async`
-4. **`enforceResources`**:
-5. **`enforceTargetConcurrentRequest`**: 
-6. **`enforceMinSize`**:     
+1. **`targetConcurrentRequests`**: Farm tries to generate resource numbers as closer as possible to this config value for initial resource loading or a dynamic resource loading.
+2. **`targetMinSize`**: The minimum size of generated resources. Note that `targetMinSize` will not be satisfied if `ModuleBucket's size` is less than `targetMinSize`, `ModuleBucket` will be given priority. Config `enforceTargetMinSize` can be used to enforce size.
+3. **`groups`**: A group of modules that should be placed together. Note that this group config is only a hit to the compiler that these modules should be placed together, it may produce multiple resources, if you want to enforce modules in the same resource, you should use `enforceResources`.
+    * **name**: Name of this group.
+    * **test**: Regex array to match the modules which are in this group.
+    * **groupType**: `mutable` or `immutable`, this group only applies to the specified type of modules.
+    * **resourceType**: `all`, `initial` or `async`, this group only applies to the specified type of resources.
+4. **`enforceResources`**: Array to match the modules that should always be in the same output resource, ignore all other constraints.
+    * **name**: Name of this resource.
+    * **test**: Regex array to match the modules which are in this resource.
+5. **`enforceTargetConcurrentRequests`**: Enforce target concurrent requests for every resource loading, when tue, smaller resource will be merged into bigger resource to meet the target concurrent requests. this may cause issue for css resource, be careful to use this option
+6. **`enforceTargetMinSize`**: Enforce target min size for every resource, when tue, smaller resource will be merged into bigger resource to meet the target concurrent requests. this may cause issue for css resource, be careful to use this option
+7. **`immutableModules`**: Regex array to match the immutable modules
+8. **`immutableModulesWeight`**: Default to `0.8`, immutable module will have 80% request numbers. For example, if `targetConcurrentRequest` is 25, then immutable resources will take `25 * 80% = 20` by default. This option is to make sure that mutable and immutable modules are isolate, if change your business code, code under node_modules won't be affected.
 
-
-# Real World Examples
