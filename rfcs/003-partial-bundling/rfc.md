@@ -186,17 +186,18 @@ For above illustration, we focus on generate resource pots for `ModuleGroup B`. 
 # User Configurations Design
 The Configurations of Partial Bundling are divide into following parts:
 1. **`targetConcurrentRequests`**: Farm tries to generate resource numbers as closer as possible to this config value for initial resource loading or a dynamic resource loading.
-2. **`targetMinSize`**: The minimum size of generated resources. Note that `targetMinSize` will not be satisfied if `ModuleBucket's size` is less than `targetMinSize`, `ModuleBucket` will be given priority. Config `enforceTargetMinSize` can be used to enforce size.
-3. **`groups`**: A group of modules that should be placed together. Note that this group config is only a hit to the compiler that these modules should be placed together, it may produce multiple resources, if you want to enforce modules in the same resource, you should use `enforceResources`.
+2. **`targetMinSize`**: The minimum size of generated resources before minify and gzip. Note that `targetMinSize` will not be satisfied if `ModuleBucket's size` is less than `targetMinSize`, `ModuleBucket` will be given priority. Config `enforceTargetMinSize` can be used to enforce size.
+3. **`targetMaxSize`**: The maximum size of generated resources before minify and gzip.
+4. **`groups`**: A group of modules that should be placed together. Note that this group config is only a hit to the compiler that these modules should be placed together, it may produce multiple resources, if you want to enforce modules in the same resource, you should use `enforceResources`.
     * **name**: Name of this group.
     * **test**: Regex array to match the modules which are in this group.
     * **groupType**: `mutable` or `immutable`, this group only applies to the specified type of modules.
     * **resourceType**: `all`, `initial` or `async`, this group only applies to the specified type of resources.
-4. **`enforceResources`**: Array to match the modules that should always be in the same output resource, ignore all other constraints.
+5. **`enforceResources`**: Array to match the modules that should always be in the same output resource, ignore all other constraints.
     * **name**: Name of this resource.
     * **test**: Regex array to match the modules which are in this resource.
-5. **`enforceTargetConcurrentRequests`**: Enforce target concurrent requests for every resource loading, when tue, smaller resource will be merged into bigger resource to meet the target concurrent requests. this may cause issue for css resource, be careful to use this option
-6. **`enforceTargetMinSize`**: Enforce target min size for every resource, when tue, smaller resource will be merged into bigger resource to meet the target concurrent requests. this may cause issue for css resource, be careful to use this option
-7. **`immutableModules`**: Regex array to match the immutable modules
-8. **`immutableModulesWeight`**: Default to `0.8`, immutable module will have 80% request numbers. For example, if `targetConcurrentRequest` is 25, then immutable resources will take `25 * 80% = 20` by default. This option is to make sure that mutable and immutable modules are isolate, if change your business code, code under node_modules won't be affected.
+6. **`enforceTargetConcurrentRequests`**: Enforce target concurrent requests for every resource loading, when tue, smaller resource will be merged into bigger resource to meet the target concurrent requests. this may cause issue for css resource, be careful to use this option
+7. **`enforceTargetMinSize`**: Enforce target min size for every resource, when tue, smaller resource will be merged into bigger resource to meet the target concurrent requests. this may cause issue for css resource, be careful to use this option
+8. **`immutableModules`**: Regex array to match the immutable modules
+9. **`immutableModulesWeight`**: Default to `0.8`, immutable module will have 80% request numbers. For example, if `targetConcurrentRequest` is 25, then immutable resources will take `25 * 80% = 20` by default. This option is to make sure that mutable and immutable modules are isolate, if change your business code, code under node_modules won't be affected.
 
