@@ -340,11 +340,13 @@ pub struct PluginAnalyzeDepsHookResultEntry {
 
 ### 5.2 生成阶段
 
-生成阶段的目标是尽可能高效地生成可部署资源（如 js、html、css、wasm）等其他资源。
+生成阶段的目标是尽可能高效地生成可部署的资源（如js、html、css、wasm等）。
 
-流程如下:
+生成流程如下：
 
-`ModuleGraph generated in build stage ---> optimize_module_graph -> analyze_module_graph -> partial bundle module -> process_resource_graph ---> for each resource in parallel ---> render_resource -> optimize_resource -> generate_resource_file -> write_resource_file`
+`
+在构建阶段生成的模块图 ---> 优化模块图 -> 分析模块图 -> 部分打包模块 -> 处理资源图 ---> 对每个资源并行处理 ---> 渲染资源 -> 优化资源 -> 生成资源文件 -> 写入资源文件
+`
 
 每类钩子代码如下:
 
@@ -430,9 +432,9 @@ pub struct PluginAnalyzeDepsHookResultEntry {
 
 Farm 计划支持两种类型的插件：
 
-- **Rust 插件**：使用 Rust 编写并作为动态库分发，提供最佳性能和实现所有编译钩子的能力。这是编写插件的推荐方式。
+- **Rust 插件**：用Rust编写并作为动态库分发，提供最佳性能，并且能够实现所有编译钩子。这是编写插件的推荐方式。
 
-- **JS 插件**：使用 JavaScript（TypeScript）编写并作为 Node.js 可执行脚本文件分发。它会减慢编译过程，并且只能实现有限的钩子。Farm 支持 JS 插件，因为它想要共享已经用 JS/TS 编写的社区工具，例如很多 Web 工具（比如 less）目前还没有 Rust 版本。
+- **JS 插件**：使用 JavaScript（TypeScript）编写并作为 Node.js 可执行脚本文件分发。它会减慢编译过程，并且只能实现有限的钩子。Farm 支持 JS 插件 （兼容 rollup/vite/unplugin 插件），因为它想要共享已经用 JS/TS 编写的社区工具，例如很多 Web 工具（比如 less）目前还没有 Rust 版本。
 
 ### 6.1 Rust Plugin
 
@@ -463,9 +465,9 @@ Rust 插件是 Farm 插件的主要方向, 因为它们快速并且强大, 但�
 
 ### 6.2 JS 插件
 
-我们对 JS 的插件支持比较有限, 导致目前 JS 插件只能实现`build_start`、`resolve`、`load`、`transform`、`build_end`和`finish`钩子。由于 Rust 和 JS 之间的数据转换代价很高，如果我们将所有像 ModuleGraph 这样的数据发送到 JS 端，将显著减慢编译速度，这违背了我们的意愿。
+我们只计划提供有限的JS插件支持，这意味着JS插件只能实现 `build_start`、`resolve`、`load`、`transform`、`build_end`和`finish`这些钩子。因为Rust和JS之间的数据转换代价高昂，如果我们将所有数据如ModuleGraph发送到JS端，将会显著减慢编译速度，这违背了我们的目标。
 
-并且 JS 插件也应该指定`filters`字段，以指定它愿意处理哪个模块。出于性能原因，我们也添加了此限制。
+JS插件还应该指定filters字段，以指定它愿意处理哪些模块。我们也是出于性能考虑而增加这一限制的。
 
 ```js
 export default {
@@ -502,12 +504,12 @@ export default {
 
 `缓存系统`的目的是提供一个跨整个编译流程的通用缓存，这意味着：
 
-- 包含 HMR 缓存，HMR 进程只更新模块图和最终资源中的一些必要模块，而其他模块在命中缓存时将保持不变。
+- 它涵盖了HMR（热模块替换），HMR过程仅更新`ModuleGraph`和最终资源中的一些必要模块，而其他模块因为命中缓存将保持不变。
 
-- 包含 `编译流` 缓存，即一个模块只处理一次。
-- 覆盖 `磁盘` 缓存，即可以将缓存串行化到磁盘并从磁盘恢复，提供类似 Webpack5 中持久缓存的能力。
+- 它涵盖了`编译流程缓存`，这意味着一个模块只会被处理一次。
+- 它涵盖了`磁盘缓存`，这意味着缓存可以被序列化到磁盘并从磁盘恢复，提供类似于webpack5的持久缓存的能力。
 
-借助缓存系统，服务器场可以为 HMR 提供极快的体验，并通过缓存实现热启动。
+借助缓存系统，Farm可以为HMR和带缓存的热启动提供极快的体验。
 
 缓存能力在`CacheManager`中设计，我们将在单独的 RFC 中介绍详细内容。
 
@@ -515,27 +517,27 @@ export default {
 
 > 我们在这里只介绍我们的部分捆绑策略的目标，我们将在单独的 RFC 中设计细节。
 
-Farm 使用 `Partial Bundling` 而不是 `Bundling`，因为我们首先是`Unbundled`。仅当模块的请求数量超过请求数量限制时，Farm 才会将模块合并在一起。我们已经做了很多测试，结果表明，在现代浏览器中，20-30 个请求将是性能最高的。当有数千个模块时，我们将使用优化策略将数千个模块合并为 20-30 个资源。
+Farm 使用 `Partial Bundling` 而不是 `Bundling`，因为我们首先是`（unbundled）`的。Farm仅在模块的请求数量超过请求数限制时才会合并模块。我们进行了大量测试，结果表明，在现代浏览器中，20-30个请求将是最高效的。当有成千上万的模块时，我们将使用我们的优化策略，将这些模块合并成 20-30 个资源。
 
 对于部分捆绑策略，Farm 将确保：
 
 - 所有共享模块和动态模块将尽可能位于单独的资源中。这类似于传统捆绑包中的代码拆分，但我们将更精确地控制每个资源中的模块。
 
-- 相关模块会尽可能放在同一资源中，例如，同一目录下的模块，因为开发人员通常会将所有相关资源放在一起，所以它们更具关联性。
+- 尽可能将相关模块放在同一资源中，例如，同一目录下的模块，它们通常更相关，因为开发者通常会将所有相关资产放在一起。
 
-此外，开发人员还可以自己配置哪些模块应该合并在一起。我们将在单独的 RFC 中介绍细节。
+此外，开发者可以配置哪些模块应该合并在一起。我们将在单独的RFC中详细介绍这些细节。
 
 ## 9. 用户界面设计
 
 Farm 的设计被分为两个部分
 
-- **Rust 实现的编译核心**：所有的解析、加载、转换、解析、依赖分析、代码优化/生成等编译流程都由 Rust 负责。Rust 部分对用户不可见，它由 Farm 的 NPM 包私下使用。只有几个 API 是从内核为 Rust 插件导出的。
+- **Rust 实现的编译核心**：所有的解析、加载、转换、解析、依赖分析、代码优化/生成等编译流程都由 Rust 负责。Rust 部分对用户不可见，它由 Farm 的 NPM 包使用。仅有少数API从核心导出，供Rust插件作者使用。
 
 - **通过 TypeScrip 实现的 CLI 和 Node API**：对于用户来说，只需要安装 Farm 的 npm 包，这些 npm 包是用 TypeScrip 编写的，就可以使用所有功能了。NPM 包封装了 Rust 内核，为用户提供了 CLI 和 Node API。所有插件也都是以 npm 包的形式分发的。
 
-所有对性能敏感的操作都将在 Rust 中实现，其他对性能要求较低的操作或者 Rust 生态系统比较薄弱的部分将在 TypeScrip 中实现。使用 TypeScript 是因为 Farm 可以轻松地共享 js 社区，例如开发服务器中间件和转换器(less、markdown 等)。用户应该只关心 npm 包。
+所有对性能敏感的操作将在Rust中实现，其他操作将在TypeScript中实现。之所以使用TypeScript，是因为Farm希望能够轻松地共享JS社区的资源，例如开发服务器中间件和转换器（如less、markdown等）。用户只需要关心npm包。
 
-Farm 中的 npm 包旨在提供两种用法：CLI 或 Node Api，CLI 由 Farm 团队提供以方便通过命令行的方式来快速使用 Farm 的核心功能，Node Api 是为想要在 Farm 之上构建工具的高级开发人员提供的。
+Farm npm包旨在提供两种用法：CLI或Node Api。CLI由Farm团队提供，便于轻松使用Farm；Node Api则提供给那些想在Farm之上构建工具的开发者。
 
 ## 1. CLI 的使用方式
 
@@ -544,12 +546,12 @@ Farm 中的 npm 包旨在提供两种用法：CLI 或 Node Api，CLI 由 Farm �
 ### 1.1 使用 `create-farm` 来创建项目
 
 ```bash
-npx create-farm # create a farm project using official templates
+npm create farm # create a farm project using official templates
 npm start # start the project using farm
 npm run build # build the project using farm
 ```
 
-`create-farm`目前支持 Vue 和 React 项目，后续会添加更多模板和功能选择。
+`create-farm`目前支持 Vue 和 React 等框架项目，后续会添加更多模板和功能选择。
 
 # 1.2 使用`@farmfe/cli`启动/搭建项目。
 

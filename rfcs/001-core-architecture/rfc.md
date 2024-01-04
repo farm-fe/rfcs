@@ -192,7 +192,7 @@ pub struct PluginLoadHookResult {
 
 #### 5.1.3 Transform
 Transforming the module's content based on `loaded source content`, the transforming is String in and String out. If you want to share Farm's internal AST, you can use `SWC plugins`.
-
+ 
 * **`Hook Kind`**: `serial`
 
 ```rust
@@ -399,7 +399,7 @@ In this section, we will discuss how to register, load, and execute Farm's plugi
 
 Farm plans to support two kinds of plugins:
 * **Rust Plugin**: Written in Rust and distributed as a dynamic library, providing the best performance and the ability to implement all compilation hooks. This is the recommended way to write plugins.
-* **JS Plugin**: Written in JavaScript (TypeScript) and distributed as a Node.js executable script file. It will slow down the compilation process and can only implement limited hooks. Farm supports JS Plugins because it wants to share existing community tools written in JS/TS, as many web tools (for example, less) do not have a Rust version for now.
+* **JS Plugin**: Written in JavaScript (TypeScript) and distributed as a Node.js executable script file. It will slow down the compilation process and can only implement limited hooks. Farm supports JS Plugins （ The vite/rollup/unplugin plugins has been adapted ）because it wants to share existing community tools written in JS/TS, as many web tools (for example, less) do not have a Rust version for now.
 
 ### 6.1 Rust Plugin
 Rust plugins are our primary goal because they are fast and powerful. However, when we encounter functionality that the Rust ecosystem does not provide, JS Plugins will be the fallback.
@@ -492,7 +492,7 @@ Two kind of official cli provided: `create-farm-app` for creating a farm project
 ### 1.1 Using `create-farm-app` to create a project
 
 ```bash
-npx create-farm-app # create a farm project using official templates
+npm create farm # create a farm project using official templates
 npm start # start the project using farm
 npm run build # build the project using farm
 ```
