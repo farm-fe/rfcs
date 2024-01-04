@@ -6,18 +6,19 @@
   "language": "en",
   // words - list of words to be always considered correct
   "words": [
-    "esbuild",
-    "pnpm",
-    "farmfe",
-    "roadmap",
-    "serde",
     "dylib",
-    "struct",
-    "rkyv",
+    "esbuild",
+    "farmfe",
     "Hoistable",
     "IIFE",
+    "pnpm",
+    "rkyv",
+    "roadmap",
+    "serde",
+    "struct",
+    "tapable",
     "typeof",
-    "tapable"
+    "unplugin"
   ],
   "ignorePaths": [
     "pnpm-lock.yaml",
