@@ -124,7 +124,7 @@ const modules = {
 
 模块系统由三个部分组成：
 
-- **模块初始化函数映射**: an object containing initialization functions of all modules
+- **模块初始化函数映射**: 一个包含所有模块初始化函数的对象
 - **已缓存模块映射**: 一个包含所有已缓存模块的对象
 - **已加载资源映射**: 一个包含已加载资源的 ID 的对象（仅适用于旧版浏览器）
 
