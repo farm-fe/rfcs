@@ -533,7 +533,7 @@ Farm 的设计被分为两个部分
 
 - **Rust 实现的编译核心**：所有的解析、加载、转换、解析、依赖分析、代码优化/生成等编译流程都由 Rust 负责。Rust 部分对用户不可见，它由 Farm 的 NPM 包使用。仅有少数API从核心导出，供Rust插件作者使用。
 
-- **通过 TypeScrip 实现的 CLI 和 Node API**：对于用户来说，只需要安装 Farm 的 npm 包，这些 npm 包是用 TypeScrip 编写的，就可以使用所有功能了。NPM 包封装了 Rust 内核，为用户提供了 CLI 和 Node API。所有插件也都是以 npm 包的形式分发的。
+- **通过 TypeScript 实现的 CLI 和 Node API**：对于用户来说，只需要安装 Farm 的 npm 包，这些 npm 包是用 TypeScript 编写的，就可以使用所有功能了。NPM 包封装了 Rust 内核，为用户提供了 CLI 和 Node API。所有插件也都是以 npm 包的形式分发的。
 
 所有对性能敏感的操作将在Rust中实现，其他操作将在TypeScript中实现。之所以使用TypeScript，是因为Farm希望能够轻松地共享JS社区的资源，例如开发服务器中间件和转换器（如less、markdown等）。用户只需要关心npm包。
 
